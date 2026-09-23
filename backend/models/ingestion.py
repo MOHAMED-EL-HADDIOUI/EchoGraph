@@ -14,6 +14,7 @@ class SourceType(str, Enum):
     DOCUMENT = "DOCUMENT"
     CODE_REVIEW = "CODE_REVIEW"
     MANUAL = "MANUAL"
+    AUDIO = "AUDIO"
 
 
 class IngestionStatus(str, Enum):

@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
     EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EXTRACTION_TIMEOUT_S: float = 60.0
+    ENABLE_EMBEDDING_DEDUP: bool = False
+    EMBEDDING_DEDUP_THRESHOLD: float = 0.85
 
     # Graph
     GRAPH_BACKEND: Literal["neo4j", "networkx"] = "networkx"
@@ -35,6 +38,9 @@ class Settings(BaseSettings):
     # Server
     LOG_LEVEL: str = "INFO"
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
+    # Empty API_KEY = open server (dev). Set it in any shared deployment.
+    API_KEY: str = ""
+    MAX_INGESTION_CHARS: int = 50_000
 
     @property
     def cors_origins_list(self) -> list[str]:

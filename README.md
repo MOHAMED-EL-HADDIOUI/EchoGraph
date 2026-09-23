@@ -12,7 +12,8 @@ uvicorn backend.app:app --reload
 ```
 
 Open http://localhost:8000/docs. Default dev backend is in-memory NetworkX +
-SQLite — no Docker needed.
+SQLite — no Docker needed. Set `API_KEY` in `.env` for any shared deployment
+(requests then need an `X-API-Key` header); `/health` and `/ready` stay public.
 
 ## Ingest → query
 
@@ -27,6 +28,9 @@ curl -X POST localhost:8000/ingestion/<job_id>/process
 # 3. Query
 curl -X POST localhost:8000/graph/query -H 'Content-Type: application/json' \
   -d '{"query": "ship"}'
+
+# Audio instead of text: transcribe first, then process the returned job
+curl -X POST localhost:8000/ingestion/transcribe -F file=@standup.mp3
 ```
 
 ## Production backend
@@ -43,3 +47,6 @@ ruff check backend tests
 ruff format --check backend tests
 pytest -q
 ```
+
+Schema changes: `alembic revision --autogenerate -m "..."` then
+`alembic upgrade head`.

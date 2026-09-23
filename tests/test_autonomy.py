@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from backend.app import app
-from backend.deps import get_answer_complete, get_extraction_complete
+from backend.deps import get_answer_complete, get_extraction_complete, get_transcriber
 
 
 async def contradiction_complete(system: str, user: str) -> dict:
@@ -82,3 +82,60 @@ async def test_query_without_llm_is_retrieval_only(client, monkeypatch):
     await client.post("/graph/nodes", json={"type": "DECISION", "title": "Ship v1"})
     r = await client.post("/graph/query", json={"query": "ship"})
     assert r.json()["answer"] is None
+
+
+async def fake_transcribe(path: str) -> str:
+    assert path.endswith(".mp3")
+    return "Ada decided to ship v1."
+
+
+async def test_transcribe_creates_audio_job(client):
+    async def echo_complete(system: str, user: str) -> dict:
+        assert "Ada decided" in user  # transcript persisted as job content
+        return {"nodes": [], "edges": []}
+
+    app.dependency_overrides[get_transcriber] = lambda: fake_transcribe
+    app.dependency_overrides[get_extraction_complete] = lambda: echo_complete
+    try:
+        r = await client.post(
+            "/ingestion/transcribe",
+            files={"file": ("meeting.mp3", b"fake-audio", "audio/mpeg")},
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["source_type"] == "AUDIO"
+        assert body["status"] == "PENDING"
+        assert body["title"] == "meeting.mp3"
+
+        r = await client.post(f"/ingestion/{body['job_id']}/process")
+        assert r.json()["status"] == "COMPLETED"
+    finally:
+        app.dependency_overrides.pop(get_transcriber, None)
+        app.dependency_overrides.pop(get_extraction_complete, None)
+
+
+async def test_transcribe_full_loop_to_graph(client):
+    """Audio -> transcript job -> process -> node in graph."""
+    app.dependency_overrides[get_transcriber] = lambda: fake_transcribe
+    app.dependency_overrides[get_extraction_complete] = lambda: contradiction_complete
+    try:
+        r = await client.post(
+            "/ingestion/transcribe",
+            files={"file": ("standup.mp3", b"fake-audio", "audio/mpeg")},
+        )
+        job_id = r.json()["job_id"]
+        r = await client.post(f"/ingestion/{job_id}/process")
+        assert r.json()["status"] == "COMPLETED"
+        assert r.json()["nodes_created"] == 3
+    finally:
+        app.dependency_overrides.pop(get_transcriber, None)
+        app.dependency_overrides.pop(get_extraction_complete, None)
+
+
+async def test_transcribe_requires_api_key_without_override(client, monkeypatch):
+    monkeypatch.setattr("backend.deps.settings.OPENAI_API_KEY", "")
+    r = await client.post(
+        "/ingestion/transcribe",
+        files={"file": ("meeting.mp3", b"fake-audio", "audio/mpeg")},
+    )
+    assert r.status_code == 503
