@@ -54,6 +54,8 @@ async def test_background_enqueue_returns_202(client, monkeypatch):
 async def test_worker_run_job_success_and_missing_key(client, test_db, tmp_graph, monkeypatch):
     from backend.worker import _run_job
 
+    # Hermetic: never depend on an ambient OPENAI_API_KEY.
+    monkeypatch.setattr("backend.config.settings.OPENAI_API_KEY", "test-key")
     # Point the worker's own session/graph factories at the test doubles.
     monkeypatch.setattr("backend.database.async_session", test_db)
     monkeypatch.setattr(
