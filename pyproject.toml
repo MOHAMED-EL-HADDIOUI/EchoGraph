@@ -1,10 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "echograph"
 version = "0.1.0"
 description = "Autonomous Knowledge Graph Builder from Organizational Noise"
 requires-python = ">=3.12"
-dependencies = [
-    "fastapi[all]>=0.115",
+dependencies = [    "fastapi[all]>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
@@ -36,6 +39,12 @@ production = [
     "asyncpg>=0.29",
     "psycopg2-binary>=2.9",
 ]
+
+# Only backend + echograph ship. Data dirs (eval/, reports/), migrations
+# (alembic/), and tests/ must never be mistaken for packages: setuptools
+# flat-layout auto-discovery fails the build when they exist.
+[tool.setuptools.packages.find]
+include = ["backend*", "echograph*"]
 
 [tool.ruff]
 line-length = 100
