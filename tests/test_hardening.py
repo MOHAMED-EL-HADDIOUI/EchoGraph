@@ -37,7 +37,10 @@ async def test_oversize_content_rejected(client, monkeypatch):
 async def test_ready_reports_dependencies(client):
     r = await client.get("/ready")
     assert r.status_code == 200
-    assert r.json() == {"status": "ready"}
+    body = r.json()
+    assert body["status"] == "ready"
+    assert body["dependencies"]["database"]["status"] == "ok"
+    assert body["dependencies"]["graph"]["status"] == "ok"
 
 
 async def test_slow_llm_chunk_times_out(tmp_graph, monkeypatch):

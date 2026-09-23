@@ -56,13 +56,15 @@ class OpenAIExtractionProvider:
                 temperature=0,
             )
         except Exception as exc:
-            raise ProviderError(f"extraction call failed: {exc}") from exc
+            raise ProviderError(f"answer call failed: {exc}") from exc
+        usage_dict = _usage_of(resp)
         obs.log_event(
             logger,
-            "llm.complete",
+            "llm.answer",
             model=self.model,
             latency_ms=round(timer.elapsed_ms(), 1),
-            usage=_usage_of(resp),
+            usage=usage_dict,
+            estimated_cost_usd=obs.estimate_cost_usd(self.model, usage_dict),
         )
         try:
             return json.loads(resp.choices[0].message.content or "{}")

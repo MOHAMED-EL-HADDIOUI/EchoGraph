@@ -63,3 +63,11 @@ class NotificationRead(BaseModel):
     is_read: bool = False
     created_at: dt.datetime | None = None
     read_at: dt.datetime | None = None
+
+
+class NotificationExplanation(BaseModel):
+    """Deterministic answer to 'why was this notification created?'."""
+
+    notification: NotificationRead
+    node_titles: list[str] = Field(default_factory=list)
+    edge_labels: list[str] = Field(default_factory=list)

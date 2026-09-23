@@ -9,7 +9,6 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import obs
@@ -26,11 +25,12 @@ from backend.models.ingestion import (
     IngestionJobRead,
     IngestionRequest,
     IngestionStatus,
-    SourceType,
 )
 from backend.models.knowledge_graph import DryRunResult
+from backend.repositories import IngestionJobRepository
 from backend.services.extraction import CompleteJson, EmbedTexts
 from backend.services.processing import dry_run_job, process_job_core
+from backend.services.sources import AudioAdapter, ManualAdapter
 from backend.services.transcription import TranscribePath, TranscriptionUnavailable
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
@@ -68,24 +68,29 @@ async def submit_ingestion(
             status_code=413,
             detail=f"Content exceeds {settings.MAX_TEXT_CHARS} chars",
         )
+    doc = await ManualAdapter().normalize(
+        {
+            "source_type": req.source_type,
+            "title": req.title or "",
+            "content": req.content or "",
+            "metadata": req.metadata,
+        }
+    )
     row = IngestionJobRow(
         id=str(uuid4()),
-        source_type=req.source_type.value,
+        source_type=doc.source_type.value,
         status=IngestionStatus.PENDING.value,
-        title=req.title or "",
-        content=req.content or "",
-        content_sha=obs.fingerprint(req.content or ""),
-        metadata_json=json.dumps(req.metadata),
+        title=doc.title,
+        content=doc.text,
+        content_sha=obs.fingerprint(doc.text),
+        metadata_json=json.dumps(doc.metadata),
     )
-    db.add(row)
-    await db.commit()
-    await db.refresh(row)
-    return _row_to_read(row)
+    return _row_to_read(await IngestionJobRepository(db).save(row))
 
 
 @router.get("/{job_id}", response_model=IngestionJobRead, summary="Get one ingestion job")
 async def read_job(job_id: str, db: AsyncSession = Depends(get_db)) -> IngestionJobRead:
-    row = await db.get(IngestionJobRow, job_id)
+    row = await IngestionJobRepository(db).get(job_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return _row_to_read(row)
@@ -97,13 +102,8 @@ async def list_jobs(
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> list[IngestionJobRead]:
-    result = await db.execute(
-        select(IngestionJobRow)
-        .order_by(IngestionJobRow.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    return [_row_to_read(r) for r in result.scalars().all()]
+    rows = await IngestionJobRepository(db).list(limit=limit, offset=offset)
+    return [_row_to_read(r) for r in rows]
 
 
 @router.post(
@@ -132,19 +132,27 @@ async def transcribe_upload(
             raise HTTPException(status_code=501, detail=str(exc)) from exc
     finally:
         os.unlink(path)
+    doc = await AudioAdapter().normalize(
+        {
+            "filename": file.filename or "audio",
+            "transcript": transcript.text,
+            "provider": transcript.provider,
+            "model": transcript.model,
+            "duration_s": transcript.duration_s,
+            "language": transcript.language,
+            "transcript_sha": transcript.transcript_sha or obs.fingerprint(transcript.text),
+        }
+    )
     row = IngestionJobRow(
         id=str(uuid4()),
-        source_type=SourceType.AUDIO.value,
+        source_type=doc.source_type.value,
         status=IngestionStatus.PENDING.value,
-        title=file.filename or "audio",
-        content=transcript,
-        content_sha=obs.fingerprint(transcript),
-        metadata_json=json.dumps({"filename": file.filename}),
+        title=doc.title,
+        content=doc.text,
+        content_sha=obs.fingerprint(doc.text),
+        metadata_json=json.dumps(doc.metadata),
     )
-    db.add(row)
-    await db.commit()
-    await db.refresh(row)
-    return _row_to_read(row)
+    return _row_to_read(await IngestionJobRepository(db).save(row))
 
 
 @router.post(
@@ -168,7 +176,7 @@ async def process_job(
     Idempotent: re-processing a COMPLETED job returns its stored outcome
     without touching the graph; only PENDING/FAILED jobs run extraction.
     """
-    row = await db.get(IngestionJobRow, job_id)
+    row = await IngestionJobRepository(db).get(job_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Job not found")
     if row.status == IngestionStatus.COMPLETED.value:
@@ -216,7 +224,7 @@ async def dry_run_process(
     complete_json: CompleteJson | None = Depends(get_extraction_complete),
     embed_texts: EmbedTexts | None = Depends(get_embedder),
 ) -> DryRunResult:
-    row = await db.get(IngestionJobRow, job_id)
+    row = await IngestionJobRepository(db).get(job_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Job not found")
     if not row.content:
@@ -237,7 +245,7 @@ async def mark_job_complete(
     edges_created: int = 0,
     db: AsyncSession = Depends(get_db),
 ) -> IngestionJobRead:
-    row = await db.get(IngestionJobRow, job_id)
+    row = await IngestionJobRepository(db).get(job_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Job not found")
     row.status = IngestionStatus.COMPLETED.value

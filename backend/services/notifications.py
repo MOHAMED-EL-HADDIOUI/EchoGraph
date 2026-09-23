@@ -3,13 +3,18 @@ from __future__ import annotations
 import json
 from uuid import uuid4
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import NotificationRow
 from backend.graph.manager import GraphManager
 from backend.models.knowledge_graph import EdgeType, KnowledgeEdge, KnowledgeNode, NodeType
-from backend.models.notifications import NotificationPriority, NotificationType
+from backend.models.notifications import (
+    NotificationExplanation,
+    NotificationPriority,
+    NotificationRead,
+    NotificationType,
+)
+from backend.repositories import NotificationRepository
 
 # Node types that should have an owner; edge types that confer ownership.
 OWNERLESS_TYPES = {NodeType.ACTION_ITEM, NodeType.DECISION}
@@ -27,18 +32,7 @@ async def find_duplicate(
     Sames means: same type, same affected-node set, and same ingestion
     (both empty counts as same). Read notifications never suppress.
     """
-    result = await db.execute(
-        select(NotificationRow).where(NotificationRow.type == ntype.value).limit(200)
-    )
-    for row in result.scalars().all():
-        if row.is_read:
-            continue
-        if set(json.loads(row.node_ids_json or "[]")) != node_ids:
-            continue
-        if (row.ingestion_id or "") != (ingestion_id or ""):
-            continue
-        return row
-    return None
+    return await NotificationRepository(db).find_duplicate(ntype.value, node_ids, ingestion_id)
 
 
 async def evaluate_notifications(
@@ -139,10 +133,59 @@ async def generate_notifications(
     by an unread notification. Commits.
     """
     created = await evaluate_notifications(graph, nodes, edges, ingestion_id, db)
-    for row in created:
-        db.add(row)
-    if created:
-        await db.commit()
-        for row in created:
-            await db.refresh(row)
-    return created
+    return await NotificationRepository(db).save_all(created)
+
+
+def to_read(row: NotificationRow) -> NotificationRead:
+    """ORM row → API model. Single conversion point used by routes and explain."""
+    return NotificationRead(
+        id=row.id,
+        type=row.type,
+        priority=row.priority,
+        severity=row.severity,
+        title=row.title,
+        message=row.message,
+        related_node_ids=json.loads(row.node_ids_json or "[]"),
+        ingestion_id=row.ingestion_id,
+        evidence_ids=json.loads(row.evidence_ids_json or "[]"),
+        is_read=row.is_read,
+        created_at=row.created_at,
+        read_at=row.read_at,
+    )
+
+
+async def explain_notification(
+    db: AsyncSession, graph: GraphManager, notification_id: str
+) -> NotificationExplanation | None:
+    """Deterministic answer to 'why was this notification created?'."""
+    row = await db.get(NotificationRow, notification_id)
+    if row is None:
+        return None
+    node_titles: list[str] = []
+    for nid in json.loads(row.node_ids_json or "[]"):
+        node = await graph.get_node(nid)
+        node_titles.append(node.title if node else f"<deleted:{nid[:8]}>")
+    edge_labels: list[str] = []
+    for eid in json.loads(row.evidence_ids_json or "[]"):
+        found = None
+        for nid in json.loads(row.node_ids_json or "[]"):
+            for edge in await graph.get_edges(nid):
+                if edge.id == eid:
+                    found = edge
+                    break
+            if found:
+                break
+        if found:
+            src = await graph.get_node(found.source_id)
+            tgt = await graph.get_node(found.target_id)
+            edge_labels.append(
+                f"{src.title if src else '?'} --{found.edge_type.value}--> "
+                f"{tgt.title if tgt else '?'}"
+            )
+        else:
+            edge_labels.append(f"<deleted:{eid[:8]}>")
+    return NotificationExplanation(
+        notification=to_read(row),
+        node_titles=node_titles,
+        edge_labels=edge_labels,
+    )

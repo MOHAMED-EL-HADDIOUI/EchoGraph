@@ -148,8 +148,37 @@ class GraphQuery(BaseModel):
 
     query: str
     filters: dict | None = None
-    limit: int = 50
+    limit: int = Field(default=50, le=200)
     include_evidence: bool = False
+    explain: bool = False
+
+
+class RetrievalInfo(BaseModel):
+    """Explainability for one query (returned only when explain=true)."""
+
+    matched_nodes: int = 0
+    expanded_nodes: int = 0
+    edges_considered: int = 0
+    ranking: list[dict] = Field(default_factory=list)
+
+
+class NodeOrigin(BaseModel):
+    ingestion_id: str = ""
+    quote: str = ""
+    source_type: str = ""
+    prompt_version: str = ""
+    extraction_run_id: str = ""
+
+
+class NodeLineage(BaseModel):
+    """Deterministic answer to 'why does this node exist?'."""
+
+    node_id: str
+    title: str
+    type: str
+    origin: NodeOrigin = Field(default_factory=NodeOrigin)
+    evidence: list[Evidence] = Field(default_factory=list)
+    merged_from: list[str] = Field(default_factory=list)
 
 
 class GraphQueryResult(BaseModel):
@@ -162,3 +191,6 @@ class GraphQueryResult(BaseModel):
     verdict: Verdict = Verdict.UNCERTAIN
     citations: list[str] = Field(default_factory=list)
     evidence: list[EvidenceItem] = Field(default_factory=list)
+    uncertainties: list[str] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    debug: RetrievalInfo | None = None

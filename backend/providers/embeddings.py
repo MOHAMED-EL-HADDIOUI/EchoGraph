@@ -32,12 +32,16 @@ class OpenAIEmbeddingProvider:
             resp = await client.embeddings.create(model=self.model, input=texts)
         except Exception as exc:
             raise ProviderError(f"embedding call failed: {exc}") from exc
+        usage = getattr(resp, "usage", None)
+        usage_dict = usage.model_dump() if usage is not None else None
         obs.log_event(
             logger,
             "llm.embed",
             model=self.model,
             latency_ms=round(timer.elapsed_ms(), 1),
             texts=len(texts),
+            usage=usage_dict,
+            estimated_cost_usd=obs.estimate_cost_usd(self.model, usage_dict),
         )
         return [list(d.embedding) for d in resp.data]
 

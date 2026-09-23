@@ -85,9 +85,16 @@ async def test_query_without_llm_is_retrieval_only(client, monkeypatch):
     assert r.json()["answer"] is None
 
 
-async def fake_transcribe(path: str) -> str:
+async def fake_transcribe(path: str):
+    from backend.providers.transcription import TranscriptResult
+
     assert path.endswith(".mp3")
-    return "Ada decided to ship v1."
+    return TranscriptResult(
+        text="Ada decided to ship v1.",
+        provider="fake",
+        model="fake",
+        transcript_sha="abc123",
+    )
 
 
 async def test_transcribe_creates_audio_job(client):

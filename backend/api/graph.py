@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from backend.deps import get_answer_complete, get_graph_manager
+from backend.deps import get_answer_complete, get_embedder, get_graph_manager
 from backend.graph.manager import GraphManager
 from backend.models.knowledge_graph import (
     GraphData,
@@ -10,14 +10,16 @@ from backend.models.knowledge_graph import (
     GraphQueryResult,
     KnowledgeEdge,
     KnowledgeNode,
+    NodeLineage,
     NodeType,
 )
+from backend.services.extraction import EmbedTexts
 from backend.services.graph_ops import (
     InvalidEdgeError,
     NodeNotFoundError,
     add_edge_validated,
 )
-from backend.services.query import CompleteText, answer_query
+from backend.services.query import CompleteText, answer_query, explain_node
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -117,8 +119,45 @@ async def query_graph(
     query: GraphQuery,
     graph: GraphManager = Depends(get_graph_manager),
     answer_text: CompleteText | None = Depends(get_answer_complete),
+    embed_texts: EmbedTexts | None = Depends(get_embedder),
 ) -> GraphQueryResult:
-    return await answer_query(graph, query, answer_text)
+    return await answer_query(graph, query, answer_text, embed_texts=embed_texts)
+
+
+@router.get(
+    "/query",
+    response_model=GraphQueryResult,
+    summary="Ask the graph via query parameters",
+    description="Same engine as POST /query. Filters accept node_type and ingestion_id.",
+)
+async def query_graph_get(
+    q: str,
+    node_type: NodeType | None = None,
+    ingestion_id: str | None = None,
+    limit: int = Query(default=50, le=200),
+    include_evidence: bool = False,
+    explain: bool = False,
+    graph: GraphManager = Depends(get_graph_manager),
+    answer_text: CompleteText | None = Depends(get_answer_complete),
+    embed_texts: EmbedTexts | None = Depends(get_embedder),
+) -> GraphQueryResult:
+    filters: dict = {}
+    if node_type is not None:
+        filters["node_type"] = node_type.value
+    if ingestion_id:
+        filters["ingestion_id"] = ingestion_id
+    return await answer_query(
+        graph,
+        GraphQuery(
+            query=q,
+            filters=filters or None,
+            limit=limit,
+            include_evidence=include_evidence,
+            explain=explain,
+        ),
+        answer_text,
+        embed_texts=embed_texts,
+    )
 
 
 @router.post(
@@ -163,6 +202,22 @@ async def read_neighbors(
     if node is None:
         raise HTTPException(status_code=404, detail="Node not found")
     return await graph.get_neighbors(node_id)
+
+
+@router.get(
+    "/nodes/{node_id}/lineage",
+    response_model=NodeLineage,
+    summary="Why does this node exist?",
+    description="Deterministic provenance chain: node → evidence → ingestion → "
+    "extraction run. No LLM involved.",
+)
+async def read_lineage(
+    node_id: str, graph: GraphManager = Depends(get_graph_manager)
+) -> NodeLineage:
+    lineage = await explain_node(graph, node_id)
+    if lineage is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return lineage
 
 
 @router.delete(

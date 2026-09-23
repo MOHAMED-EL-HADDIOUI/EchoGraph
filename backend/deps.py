@@ -72,7 +72,7 @@ def get_embedder() -> EmbedTexts | None:
 def get_transcriber() -> TranscribePath:
     """Audio hook for transcription. Override in tests; 503 without a key (api mode)."""
     if settings.WHISPER_MODE == "local":
-        return make_transcriber("local", settings.OPENAI_API_KEY)
+        return make_transcriber("local", settings.OPENAI_API_KEY, settings.WHISPER_MODEL)
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured")
-    return make_transcriber("api", settings.OPENAI_API_KEY)
+    return make_transcriber("api", settings.OPENAI_API_KEY, settings.WHISPER_MODEL)

@@ -22,14 +22,57 @@ def new_request_id() -> str:
 async def request_id_middleware(request: Request, call_next) -> Response:
     rid = request.headers.get("x-request-id") or new_request_id()
     request_id.set(rid)
+    timer = Timer()
     response = await call_next(request)
     response.headers["X-Request-ID"] = rid
+    logging.getLogger(__name__).info(
+        "http.request %s",
+        json.dumps(
+            {
+                "request_id": rid,
+                "method": request.method,
+                "path": request.url.path,
+                "status": response.status_code,
+                "latency_ms": round(timer.elapsed_ms(), 1),
+            }
+        ),
+    )
     return response
 
 
 def fingerprint(content: str) -> str:
     """Short content hash for logs. Never log raw transcripts (see below)."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()[:12]
+
+
+def fingerprint_content(text: str) -> str:
+    """SHA-256 content fingerprint (full hex). Identity without leakage."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# USD per 1M tokens (prompt, completion). Only used when the provider
+# reports usage; unknown models yield None (no invented pricing).
+_MODEL_PRICES: dict[str, tuple[float, float]] = {
+    "gpt-4o": (2.50, 10.00),
+    "gpt-4o-mini": (0.15, 0.60),
+    "text-embedding-3-small": (0.02, 0.0),
+    "text-embedding-3-large": (0.13, 0.0),
+}
+
+
+def estimate_cost_usd(model: str, usage: dict | None) -> float | None:
+    """Estimated call cost from reported token usage. None when unknown."""
+    if not usage or model not in _MODEL_PRICES:
+        return None
+    prompt_price, completion_price = _MODEL_PRICES[model]
+    try:
+        return round(
+            usage.get("prompt_tokens", 0) / 1_000_000 * prompt_price
+            + usage.get("completion_tokens", 0) / 1_000_000 * completion_price,
+            6,
+        )
+    except (TypeError, AttributeError):
+        return None
 
 
 def log_event(logger: logging.Logger, event: str, level: int = logging.INFO, **fields: Any) -> None:
