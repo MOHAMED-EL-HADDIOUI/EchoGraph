@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="EchoGraph logo">
+  <defs>
+    <linearGradient id="eg-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#312e81"/>
+    </linearGradient>
+    <linearGradient id="eg-edge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <radialGradient id="eg-core" cx="0.35" cy="0.35" r="0.95">
+      <stop offset="0" stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </radialGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#eg-bg)"/>
+  <path d="M50 94 a66 66 0 0 1 0 68" fill="none" stroke="#3B82F6" stroke-width="7" opacity="0.35" stroke-linecap="round"/>
+  <path d="M70 112 a40 40 0 0 1 0 32" fill="none" stroke="#8B5CF6" stroke-width="7" opacity="0.55" stroke-linecap="round"/>
+  <g stroke="url(#eg-edge)" stroke-width="5" stroke-linecap="round" opacity="0.9">
+    <line x1="132" y1="128" x2="90" y2="88"/>
+    <line x1="132" y1="128" x2="178" y2="92"/>
+    <line x1="132" y1="128" x2="182" y2="172"/>
+    <line x1="132" y1="128" x2="86" y2="176"/>
+    <line x1="90" y1="88" x2="178" y2="92"/>
+  </g>
+  <circle cx="90" cy="88" r="14" fill="#3B82F6"/>
+  <circle cx="178" cy="92" r="14" fill="#10B981"/>
+  <circle cx="182" cy="172" r="14" fill="#EC4899"/>
+  <circle cx="86" cy="176" r="14" fill="#8B5CF6"/>
+  <circle cx="132" cy="128" r="23" fill="url(#eg-core)"/>
+  <circle cx="124" cy="120" r="7" fill="#ffffff" opacity="0.85"/>
+</svg>
