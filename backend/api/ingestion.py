@@ -2,18 +2,16 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import logging
 import os
 import shutil
 import tempfile
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend import obs
 from backend.config import settings
 from backend.database import IngestionJobRow, get_db
 from backend.deps import (
@@ -29,13 +27,11 @@ from backend.models.ingestion import (
     IngestionStatus,
     SourceType,
 )
-from backend.services.extraction import CompleteJson, EmbedTexts, run_extraction
-from backend.services.notifications import generate_notifications
+from backend.services.extraction import CompleteJson, EmbedTexts
+from backend.services.processing import process_job_core
 from backend.services.transcription import TranscribePath, TranscriptionUnavailable
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
-
-logger = logging.getLogger(__name__)
 
 # Matches the OpenAI audio limit; larger files are rejected, not truncated.
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
@@ -153,14 +149,16 @@ async def transcribe_upload(
     "/{job_id}/process",
     response_model=IngestionJobRead,
     summary="Extract a knowledge graph from a job",
-    description="Runs LLM extraction synchronously. Idempotent: COMPLETED jobs return "
-    "their stored outcome; PENDING/FAILED jobs run; PROCESSING jobs get 409.",
+    description="Inline extraction by default. With USE_BACKGROUND_JOBS, enqueues a "
+    "Celery task and returns 202. Idempotent: COMPLETED jobs return their stored "
+    "outcome; PENDING/FAILED jobs run; PROCESSING jobs get 409.",
 )
 async def process_job(
     job_id: str,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     graph: GraphManager = Depends(get_graph_manager),
-    complete_json: CompleteJson = Depends(get_extraction_complete),
+    complete_json: CompleteJson | None = Depends(get_extraction_complete),
     embed_texts: EmbedTexts | None = Depends(get_embedder),
 ) -> IngestionJobRead:
     """Run LLM extraction for a job synchronously (no worker queue yet).
@@ -179,55 +177,23 @@ async def process_job(
         raise HTTPException(status_code=409, detail=f"Job is {row.status}, not processable")
     if not row.content:
         raise HTTPException(status_code=422, detail="Job has no content to process")
-    row.status = IngestionStatus.PROCESSING.value
-    row.attempts += 1
-    await db.commit()
-    timer = obs.Timer()
-    obs.log_event(
-        logger,
-        "ingestion.process_start",
-        job_id=row.id,
-        attempt=row.attempts,
-        content_chars=len(row.content or ""),
-        content_sha=obs.fingerprint(row.content or ""),
-    )
-    try:
-        extracted = await run_extraction(
-            graph,
-            row.content,
-            complete_json,
-            source_type=row.source_type,
-            embed_texts=embed_texts,
-            ingestion_id=row.id,
-        )
-    except Exception as exc:  # noqa: BLE001 — any extraction failure becomes FAILED
-        row.status = IngestionStatus.FAILED.value
-        row.error = str(exc)[:2000]
+    if complete_json is None and not settings.USE_BACKGROUND_JOBS:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured")
+    if settings.USE_BACKGROUND_JOBS:
+        try:
+            from backend.worker import enqueue_process
+        except ImportError as exc:
+            raise HTTPException(status_code=501, detail="Background workers not installed") from exc
+        enqueue_process(row.id)
+        row.status = IngestionStatus.PROCESSING.value
+        row.attempts += 1
         await db.commit()
         await db.refresh(row)
+        response.status_code = 202
         return _row_to_read(row)
-    row.status = IngestionStatus.COMPLETED.value
-    row.nodes_created = extracted.nodes_created
-    row.edges_created = extracted.edges_created
-    row.error = "\n".join(extracted.errors)[:2000]
-    row.completed_at = dt.datetime.utcnow()
-    await db.commit()
-    await db.refresh(row)
-    notifications = await generate_notifications(
-        graph, db, extracted.nodes, extracted.edges, ingestion_id=row.id
-    )
-    obs.log_event(
-        logger,
-        "ingestion.process_finish",
-        job_id=row.id,
-        status=row.status,
-        nodes=extracted.nodes_created,
-        edges=extracted.edges_created,
-        notifications=len(notifications),
-        latency_ms=round(timer.elapsed_ms(), 1),
-    )
+    row, notification_count = await process_job_core(db, graph, row, complete_json, embed_texts)
     body = _row_to_read(row)
-    body.notifications_created = len(notifications)
+    body.notifications_created = notification_count
     return body
 
 

@@ -25,6 +25,11 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
 - `backend/services/graph_ops.py` — `add_edge_validated()` is the single choke point
   for edge writes (endpoint existence + `validate_edge()`); routes and workers must use
   it, never `graph.add_edge` directly.
+- `backend/services/processing.py` — `process_job_core()` shared by the inline
+  route and the Celery task (attempts, PROCESSING, extraction, notifications).
+- `backend/worker.py` — lazy Celery app (`celery -A backend.worker:celery_app`,
+  `--pool=solo` on Windows); `USE_BACKGROUND_JOBS=true` makes `POST /process`
+  enqueue (202) instead of extracting inline. Broker deps stay optional for dev.
 - `backend/services/extraction.py` — sync LLM extraction. `CompleteJson` seam
   `(system, user) -> dict`; `run_extraction()` returns `ExtractionResult` and never
   raises on bad LLM output (caps errors at `MAX_ERRORS`, per-chunk timeout via

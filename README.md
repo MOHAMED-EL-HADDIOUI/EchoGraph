@@ -70,6 +70,23 @@ docker compose up -d neo4j
 GRAPH_BACKEND=neo4j uvicorn backend.app:app
 ```
 
+## Background workers (optional)
+
+Inline extraction blocks the request for the whole LLM run. For real
+workloads, offload it to Celery + Redis:
+
+```bash
+pip install -e ".[production]"   # celery, redis client
+docker compose up -d redis
+USE_BACKGROUND_JOBS=true uvicorn backend.app:app
+celery -A backend.worker:celery_app worker --loglevel=info --queues=echograph
+# Windows: add --pool=solo (prefork is unsupported on Windows)
+```
+
+With the flag on, `POST /ingestion/{id}/process` enqueues and returns `202`
+with the job in PROCESSING state; the worker runs the same
+`process_job_core()` the inline path uses, so behavior is identical.
+
 ## Verify
 
 ```bash

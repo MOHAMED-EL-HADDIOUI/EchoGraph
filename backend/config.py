@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # Empty API_KEY = open server (dev). Set it in any shared deployment.
     API_KEY: str = ""
     MAX_INGESTION_CHARS: int = 50_000
+    # When true, POST /ingestion/{id}/process enqueues a Celery task (202)
+    # instead of extracting inline. Requires a running worker + Redis.
+    USE_BACKGROUND_JOBS: bool = False
 
     @property
     def cors_origins_list(self) -> list[str]:

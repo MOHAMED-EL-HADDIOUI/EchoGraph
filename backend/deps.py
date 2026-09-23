@@ -43,10 +43,15 @@ def get_graph_manager(request: Request) -> GraphManager:
     return request.app.state.graph
 
 
-def get_extraction_complete() -> CompleteJson:
-    """LLM hook for ingestion. Override in tests with a fake; 503 without a key."""
+def get_extraction_complete() -> CompleteJson | None:
+    """LLM hook for ingestion. Override in tests with a fake.
+
+    Returns None without a key: the sync route turns that into 503, while
+    the background path enqueues regardless (the worker fails the job if
+    still keyless).
+    """
     if not settings.OPENAI_API_KEY:
-        raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured")
+        return None
     return make_openai_complete(settings.OPENAI_MODEL, settings.OPENAI_API_KEY)
 
 
