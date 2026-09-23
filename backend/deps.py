@@ -52,14 +52,14 @@ def get_extraction_complete() -> CompleteJson | None:
     """
     if not settings.OPENAI_API_KEY:
         return None
-    return make_openai_complete(settings.OPENAI_MODEL, settings.OPENAI_API_KEY)
+    return make_openai_complete(settings.OPENAI_EXTRACTION_MODEL, settings.OPENAI_API_KEY)
 
 
 def get_answer_complete() -> CompleteText | None:
     """LLM hook for query answers. Returns None (retrieval-only) without a key."""
     if not settings.OPENAI_API_KEY:
         return None
-    return make_openai_answer(settings.OPENAI_MODEL, settings.OPENAI_API_KEY)
+    return make_openai_answer(settings.OPENAI_ANSWER_MODEL, settings.OPENAI_API_KEY)
 
 
 def get_embedder() -> EmbedTexts | None:

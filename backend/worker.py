@@ -79,7 +79,9 @@ async def _run_job(job_id: str) -> dict:
                 row.error = "OPENAI_API_KEY not configured"
                 await session.commit()
                 return {"ok": False, "status": row.status}
-            complete = make_openai_complete(settings.OPENAI_MODEL, settings.OPENAI_API_KEY)
+            complete = make_openai_complete(
+                settings.OPENAI_EXTRACTION_MODEL, settings.OPENAI_API_KEY
+            )
             embedder = None
             if settings.ENABLE_EMBEDDING_DEDUP:
                 embedder = make_openai_embeddings(settings.EMBEDDING_MODEL, settings.OPENAI_API_KEY)

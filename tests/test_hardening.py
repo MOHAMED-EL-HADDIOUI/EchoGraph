@@ -29,7 +29,7 @@ async def test_auth_enforced_when_key_set(client, monkeypatch):
 
 async def test_oversize_content_rejected(client, monkeypatch):
     # settings is a shared singleton; patching it once covers the route.
-    monkeypatch.setattr("backend.api.ingestion.settings.MAX_INGESTION_CHARS", 10)
+    monkeypatch.setattr("backend.api.ingestion.settings.MAX_TEXT_CHARS", 10)
     r = await client.post("/ingestion", json={"source_type": "SLACK", "content": "x" * 11})
     assert r.status_code == 413
 
@@ -41,7 +41,7 @@ async def test_ready_reports_dependencies(client):
 
 
 async def test_slow_llm_chunk_times_out(tmp_graph, monkeypatch):
-    monkeypatch.setattr("backend.services.extraction.settings.EXTRACTION_TIMEOUT_S", 0.05)
+    monkeypatch.setattr("backend.services.extraction.settings.LLM_TIMEOUT_SECONDS", 0.05)
 
     async def slow_complete(system: str, user: str) -> dict:
         await asyncio.sleep(5)

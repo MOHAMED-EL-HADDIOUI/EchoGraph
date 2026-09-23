@@ -28,7 +28,7 @@ class NetworkXGraphManager(GraphManager):
     def __init__(self, data_path: str | None = None) -> None:
         self._graph = nx.DiGraph()
         self._lock = asyncio.Lock()
-        self._data_path = Path(data_path or settings.GRAPH_DATA_PATH)
+        self._data_path = Path(data_path or settings.NETWORKX_PATH)
         self._load()
 
     # ── persistence ─────────────────────────────────────────────

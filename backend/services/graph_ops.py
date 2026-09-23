@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from backend import obs
+from backend.exceptions import GraphError, GraphValidationError
 from backend.graph.manager import GraphManager
 from backend.graph.schema import validate_edge
 from backend.models.knowledge_graph import KnowledgeEdge
@@ -10,11 +11,11 @@ from backend.models.knowledge_graph import KnowledgeEdge
 logger = logging.getLogger(__name__)
 
 
-class NodeNotFoundError(ValueError):
+class NodeNotFoundError(GraphError):
     """Raised when an edge endpoint does not exist."""
 
 
-class InvalidEdgeError(ValueError):
+class InvalidEdgeError(GraphValidationError):
     """Raised when the (source, edge, target) triple violates VALID_EDGES."""
 
 

@@ -25,7 +25,7 @@ class Neo4jGraphManager(GraphManager):
 
         self._driver = AsyncGraphDatabase.driver(
             settings.NEO4J_URI,
-            auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
+            auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD),
         )
 
     async def close(self) -> None:

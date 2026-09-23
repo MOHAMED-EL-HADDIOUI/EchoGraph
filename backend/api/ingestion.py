@@ -33,9 +33,6 @@ from backend.services.transcription import TranscribePath, TranscriptionUnavaila
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
-# Matches the OpenAI audio limit; larger files are rejected, not truncated.
-MAX_AUDIO_BYTES = 25 * 1024 * 1024
-
 
 def _row_to_read(row: IngestionJobRow) -> IngestionJobRead:
     return IngestionJobRead(
@@ -63,10 +60,10 @@ def _row_to_read(row: IngestionJobRow) -> IngestionJobRead:
 async def submit_ingestion(
     req: IngestionRequest, db: AsyncSession = Depends(get_db)
 ) -> IngestionJobRead:
-    if req.content and len(req.content) > settings.MAX_INGESTION_CHARS:
+    if req.content and len(req.content) > settings.MAX_TEXT_CHARS:
         raise HTTPException(
             status_code=413,
-            detail=f"Content exceeds {settings.MAX_INGESTION_CHARS} chars",
+            detail=f"Content exceeds {settings.MAX_TEXT_CHARS} chars",
         )
     row = IngestionJobRow(
         id=str(uuid4()),
@@ -123,7 +120,7 @@ async def transcribe_upload(
         shutil.copyfileobj(file.file, tmp)
         path = tmp.name
     try:
-        if os.path.getsize(path) > MAX_AUDIO_BYTES:
+        if os.path.getsize(path) > settings.MAX_AUDIO_BYTES:
             raise HTTPException(status_code=413, detail="Audio file exceeds 25 MB")
         try:
             transcript = await transcribe(path)

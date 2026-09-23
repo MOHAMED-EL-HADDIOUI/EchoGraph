@@ -42,9 +42,6 @@ substring or leave the quote empty. Prefer few high-confidence nodes over many g
 Every edge endpoint must match a node title exactly.
 """
 
-MAX_ERRORS = 20
-
-
 def merge_evidence(existing: list[Evidence], new: Evidence) -> list[Evidence]:
     """Append provenance, deduplicated by (ingestion_id, quote)."""
     if (new.ingestion_id, new.quote) not in {(e.ingestion_id, e.quote) for e in existing}:
@@ -164,7 +161,7 @@ async def run_extraction(
     """Extract nodes/edges from content into the graph.
 
     Never raises on bad LLM output: problems are collected into errors
-    (capped at MAX_ERRORS). Every created node/edge carries provenance
+    (capped at MAX_EXTRACTION_ERRORS). Every created node/edge carries provenance
     (ingestion id + source quote). Facts without support are rejected, not
     fabricated. When ``embed_texts`` is given, new nodes are embedded and
     deduplicated by cosine similarity before exact-title matching falls
@@ -182,7 +179,7 @@ async def run_extraction(
     )
 
     def record(msg: str) -> None:
-        if len(result.errors) < MAX_ERRORS:
+        if len(result.errors) < settings.MAX_EXTRACTION_ERRORS:
             result.errors.append(msg)
         logger.warning("extraction: %s", msg)
 
@@ -199,11 +196,11 @@ async def run_extraction(
         try:
             raw = await asyncio.wait_for(
                 complete_json(SYSTEM_PROMPT, chunk),
-                timeout=settings.EXTRACTION_TIMEOUT_S,
+                timeout=settings.LLM_TIMEOUT_SECONDS,
             )
             extracted = ExtractedGraph.model_validate(raw)
         except TimeoutError:
-            record(f"chunk timed out after {settings.EXTRACTION_TIMEOUT_S}s, skipped")
+            record(f"chunk timed out after {settings.LLM_TIMEOUT_SECONDS}s, skipped")
             continue
         except ValidationError as exc:
             record(f"invalid extraction payload: {exc}")

@@ -6,6 +6,7 @@ import os
 from collections.abc import Awaitable, Callable
 
 from backend import obs
+from backend.exceptions import TranscriptionError
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 TranscribePath = Callable[[str], Awaitable[str]]
 
 
-class TranscriptionUnavailable(Exception):
+class TranscriptionUnavailable(TranscriptionError):
     """Raised when the configured transcription backend cannot run."""
 
 
