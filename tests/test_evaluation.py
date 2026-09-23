@@ -32,6 +32,25 @@ async def test_eval_suite_is_green(tmp_path):
     assert report.totals["fabricated_total"] == 0.0
 
 
+async def test_eval_cli_live_requires_explicit_key(tmp_path, monkeypatch, capsys):
+    from echograph.eval import main
+
+    monkeypatch.setattr("backend.config.settings.OPENAI_API_KEY", "")
+    monkeypatch.setattr("echograph.eval.settings.OPENAI_API_KEY", "")
+    code = main(
+        ["--cases", str(CASES_DIR), "--report", str(tmp_path / "eval.json"), "--provider", "live"]
+    )
+    assert code == 2
+
+
+async def test_eval_report_carries_reproducibility_metadata(tmp_path):
+    from backend.services.evaluation import summarize
+
+    report = summarize([], provider="fake", prompt_version="v1", answer_prompt_version="v1")
+    assert report.extraction_prompt_version == "v1"
+    assert report.timestamp != ""
+
+
 async def test_malformed_llm_payload_is_recorded_not_raised(tmp_path):
     async def garbage_complete(system: str, user: str) -> dict:
         return {"nodes": [{"type": "NOT_A_TYPE", "title": "x"}]}

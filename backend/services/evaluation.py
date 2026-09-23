@@ -51,6 +51,8 @@ class CaseMetrics(BaseModel):
     decision_recall: float = 0.0
     contradiction_recall: float = 0.0
     fabricated: list[str] = Field(default_factory=list)
+    unexpected_edges: list[str] = Field(default_factory=list)
+    unsupported_quotes: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     passed: bool = False
 
@@ -64,6 +66,12 @@ class EvalReport(BaseModel):
     cases: list[CaseResult] = Field(default_factory=list)
     totals: dict[str, float] = Field(default_factory=dict)
     passed: bool = False
+    provider: str = "fake"
+    model: str = ""
+    extraction_prompt_version: str = ""
+    answer_prompt_version: str = ""
+    timestamp: str = ""
+    runtime_s: float = 0.0
 
 
 def load_cases(cases_dir: str | Path) -> list[EvalCase]:
@@ -92,6 +100,22 @@ async def run_case(graph: GraphManager, case: EvalCase) -> CaseResult:
     result = await run_extraction(
         graph, case.transcript, recorded_complete, ingestion_id=f"eval-{case.id}"
     )
+    metrics = await score_case(graph, case, result)
+    obs.log_event(
+        logger,
+        "eval.case",
+        case_id=case.id,
+        passed=metrics.passed,
+        latency_ms=round(timer.elapsed_ms(), 1),
+    )
+    return CaseResult(case_id=case.id, metrics=metrics)
+
+
+async def score_case(graph: GraphManager, case: EvalCase, result) -> CaseMetrics:
+    """Score an extraction result against expectations (shared by fake/live)."""
+    from backend.services.extraction import ExtractionResult
+
+    assert isinstance(result, ExtractionResult)
     exp = case.expected
 
     got_nodes = {(n.type.value, n.title.lower()) for n in result.nodes}
@@ -141,6 +165,18 @@ async def run_case(graph: GraphManager, case: EvalCase) -> CaseResult:
     contra_r = len(contra_pairs & want_contra) / len(want_contra) if want_contra else 1.0
 
     fabricated = sorted(f"{t}:{ti}" for (t, ti) in got_nodes - want_nodes)
+    unexpected_edges = sorted(f"{s} -{t}-> {u}" for (s, t, u) in got_edges - want_edges)
+    lowered_transcript = case.transcript.lower()
+    unsupported_quotes = []
+    for n in result.nodes:
+        for ev in n.evidence:
+            if ev.quote and ev.quote.lower() not in lowered_transcript:
+                unsupported_quotes.append(f"node:{n.title}:{ev.quote[:60]}")
+    for e in result.edges:
+        if e.evidence and e.evidence.lower() not in lowered_transcript:
+            unsupported_quotes.append(f"edge:{e.id[:8]}:{e.evidence[:60]}")
+    unsupported_quotes = sorted(set(unsupported_quotes))
+
     metrics = CaseMetrics(
         node_precision=node_p,
         node_recall=node_r,
@@ -151,6 +187,8 @@ async def run_case(graph: GraphManager, case: EvalCase) -> CaseResult:
         decision_recall=decision_r,
         contradiction_recall=contra_r,
         fabricated=fabricated,
+        unexpected_edges=unexpected_edges,
+        unsupported_quotes=unsupported_quotes,
         errors=result.errors,
     )
     metrics.passed = (
@@ -159,19 +197,24 @@ async def run_case(graph: GraphManager, case: EvalCase) -> CaseResult:
         and edge_p == 1.0
         and edge_r == 1.0
         and not fabricated
+        and not unexpected_edges
+        and not unsupported_quotes
         and not result.errors
     )
-    obs.log_event(
-        logger,
-        "eval.case",
-        case_id=case.id,
-        passed=metrics.passed,
-        latency_ms=round(timer.elapsed_ms(), 1),
-    )
-    return CaseResult(case_id=case.id, metrics=metrics)
+    return metrics
 
 
-def summarize(results: list[CaseResult]) -> EvalReport:
+def summarize(
+    results: list[CaseResult],
+    *,
+    provider: str = "fake",
+    model: str = "",
+    prompt_version: str = "",
+    answer_prompt_version: str = "",
+    runtime_s: float = 0.0,
+) -> EvalReport:
+    import datetime as dt
+
     def avg(field: str) -> float:
         vals = [getattr(r.metrics, field) for r in results]
         return sum(vals) / len(vals) if vals else 0.0
@@ -190,8 +233,18 @@ def summarize(results: list[CaseResult]) -> EvalReport:
         )
     }
     totals["fabricated_total"] = float(sum(len(r.metrics.fabricated) for r in results))
+    totals["unexpected_edges_total"] = float(sum(len(r.metrics.unexpected_edges) for r in results))
+    totals["unsupported_quotes_total"] = float(
+        sum(len(r.metrics.unsupported_quotes) for r in results)
+    )
     return EvalReport(
         cases=results,
         totals=totals,
         passed=bool(results) and all(r.metrics.passed for r in results),
+        provider=provider,
+        model=model,
+        extraction_prompt_version=prompt_version,
+        answer_prompt_version=answer_prompt_version,
+        timestamp=dt.datetime.utcnow().isoformat(),
+        runtime_s=runtime_s,
     )

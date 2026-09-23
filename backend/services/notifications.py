@@ -109,12 +109,6 @@ async def evaluate_notifications(
             [node.id],
         )
 
-    for row in created:
-        db.add(row)
-    if created:
-        await db.commit()
-        for row in created:
-            await db.refresh(row)
     return created
 
 

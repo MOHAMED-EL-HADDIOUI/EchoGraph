@@ -1,6 +1,78 @@
 {
   "cases": [
     {
+      "case_id": "atlas-meeting-1",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
+      "case_id": "atlas-meeting-2",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
+      "case_id": "atlas-meeting-3",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
+      "case_id": "atlas-meeting-4",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
       "case_id": "conflicting-decisions",
       "metrics": {
         "node_precision": 1.0,
@@ -12,6 +84,8 @@
         "decision_recall": 1.0,
         "contradiction_recall": 1.0,
         "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
         "errors": [],
         "passed": true
       }
@@ -28,6 +102,8 @@
         "decision_recall": 1.0,
         "contradiction_recall": 1.0,
         "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
         "errors": [],
         "passed": true
       }
@@ -44,6 +120,8 @@
         "decision_recall": 1.0,
         "contradiction_recall": 1.0,
         "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
         "errors": [],
         "passed": true
       }
@@ -60,6 +138,8 @@
         "decision_recall": 1.0,
         "contradiction_recall": 1.0,
         "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
         "errors": [],
         "passed": true
       }
@@ -76,6 +156,8 @@
         "decision_recall": 1.0,
         "contradiction_recall": 1.0,
         "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
         "errors": [],
         "passed": true
       }
@@ -92,6 +174,8 @@
         "decision_recall": 1.0,
         "contradiction_recall": 1.0,
         "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
         "errors": [],
         "passed": true
       }
@@ -108,6 +192,8 @@
         "decision_recall": 1.0,
         "contradiction_recall": 1.0,
         "fabricated": [],
+        "unexpected_edges": [],
+        "unsupported_quotes": [],
         "errors": [],
         "passed": true
       }
@@ -122,7 +208,15 @@
     "owner_recall": 1.0,
     "decision_recall": 1.0,
     "contradiction_recall": 1.0,
-    "fabricated_total": 0.0
+    "fabricated_total": 0.0,
+    "unexpected_edges_total": 0.0,
+    "unsupported_quotes_total": 0.0
   },
-  "passed": true
+  "passed": true,
+  "provider": "fake",
+  "model": "",
+  "extraction_prompt_version": "v1",
+  "answer_prompt_version": "v1",
+  "timestamp": "2026-09-23T18:01:10.311762",
+  "runtime_s": 0.16
 }

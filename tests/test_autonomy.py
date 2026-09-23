@@ -114,6 +114,8 @@ async def test_transcribe_creates_audio_job(client):
         assert body["source_type"] == "AUDIO"
         assert body["status"] == "PENDING"
         assert body["title"] == "meeting.mp3"
+        assert body["metadata"]["provider"] == "fake"
+        assert body["metadata"]["transcript_sha"] == "abc123"
 
         r = await client.post(f"/ingestion/{body['job_id']}/process")
         assert r.json()["status"] == "COMPLETED"
