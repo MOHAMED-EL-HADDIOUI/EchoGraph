@@ -312,3 +312,62 @@ async def test_alembic_downgrade_roundtrip(tmp_path, monkeypatch):
         assert "content_sha" in columns()
     finally:
         reenable_logging()
+
+
+async def test_decision_history_timeline(client):
+    old = (
+        await client.post("/graph/nodes", json={"type": "DECISION", "title": "Use SQLite"})
+    ).json()
+    new = (
+        await client.post("/graph/nodes", json={"type": "DECISION", "title": "Use Postgres"})
+    ).json()
+    rival = (
+        await client.post("/graph/nodes", json={"type": "DECISION", "title": "Stay on MySQL"})
+    ).json()
+    await client.post(
+        "/graph/edges",
+        json={"source_id": new["id"], "target_id": old["id"], "edge_type": "SUPERSEDES"},
+    )
+    await client.post(
+        "/graph/edges",
+        json={"source_id": rival["id"], "target_id": new["id"], "edge_type": "CONTRADICTS"},
+    )
+
+    body = (await client.get(f"/graph/nodes/{new['id']}/history")).json()
+    assert body["node"]["title"] == "Use Postgres"
+    relations = {e["relation"] for e in body["events"]}
+    assert relations == {"supersedes", "contradicted_by"}
+    assert {e["node"]["title"] for e in body["events"]} == {"Use SQLite", "Stay on MySQL"}
+
+    body = (await client.get(f"/graph/nodes/{old['id']}/history")).json()
+    # Transitive: old was superseded by new, which rival contradicts.
+    assert {e["relation"] for e in body["events"]} == {"superseded_by", "contradicted_by"}
+
+    lonely = (
+        await client.post("/graph/nodes", json={"type": "DECISION", "title": "Lonely"})
+    ).json()
+    assert (await client.get(f"/graph/nodes/{lonely['id']}/history")).json()["events"] == []
+    assert (await client.get("/graph/nodes/missing/history")).status_code == 404
+
+
+async def test_unresolved_questions_endpoint(client):
+    open_q = (
+        await client.post("/graph/nodes", json={"type": "QUESTION", "title": "When launch?"})
+    ).json()
+    answered_q = (
+        await client.post("/graph/nodes", json={"type": "QUESTION", "title": "Who pays?"})
+    ).json()
+    answer = (
+        await client.post("/graph/nodes", json={"type": "QUESTION", "title": "We pay"})
+    ).json()
+    await client.post(
+        "/graph/edges",
+        json={"source_id": answer["id"], "target_id": answered_q["id"], "edge_type": "ANSWERS"},
+    )
+    # QUESTION-ANSWERS->QUESTION is valid; an answer node is still a question type.
+    titles = {n["title"] for n in (await client.get("/graph/questions/unresolved")).json()}
+    assert "When launch?" in titles
+    assert "Who pays?" not in titles
+    assert open_q["id"] in {
+        n["id"] for n in (await client.get("/graph/questions/unresolved")).json()
+    }

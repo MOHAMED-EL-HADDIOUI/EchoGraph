@@ -28,6 +28,8 @@ documented here as the project convention.
   (preview), `POST /ingestion/transcribe`, `GET /ingestion` (`limit`/`offset`)
 - `POST /graph/query` and `GET /graph/query?q=` (`node_type`, `ingestion_id`,
   `include_evidence`, `explain`); `GET /graph/nodes/{id}/lineage`,
+  `GET /graph/nodes/{id}/history` (decision evolution timeline),
+  `GET /graph/questions/unresolved` (organizational gaps),
   `GET /graph/export`, `GET /graph/nodes/{id}/neighbors`
 - `GET /notifications`, `PATCH|POST /notifications/{id}/read`,
   `GET /notifications/{id}/explain`

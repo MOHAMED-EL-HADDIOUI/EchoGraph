@@ -7,6 +7,7 @@ from backend.models.ingestion import (
     SourceType,
 )
 from backend.models.knowledge_graph import (
+    DecisionHistory,
     DryRunResult,
     EdgeType,
     Evidence,
@@ -15,6 +16,7 @@ from backend.models.knowledge_graph import (
     GraphDiff,
     GraphQuery,
     GraphQueryResult,
+    HistoryEvent,
     KnowledgeEdge,
     KnowledgeNode,
     NodeLineage,
@@ -33,6 +35,7 @@ from backend.models.notifications import (
 )
 
 __all__ = [
+    "DecisionHistory",
     "Document",
     "DryRunResult",
     "EdgeType",
@@ -42,6 +45,7 @@ __all__ = [
     "GraphDiff",
     "GraphQuery",
     "GraphQueryResult",
+    "HistoryEvent",
     "IngestionJobRead",
     "IngestionRequest",
     "IngestionResult",

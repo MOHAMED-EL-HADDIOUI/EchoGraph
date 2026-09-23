@@ -10,7 +10,8 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
   `docker compose --profile full up` (postgres, redis, neo4j, worker);
   plain `docker compose up` runs the API only.
 - Verify: `ruff check .`, `ruff format --check .`, `pytest -q`,
-  `python -m echograph.eval` (same four steps run in `.github/workflows/ci.yml`).
+  `python -m echograph.eval` (same four steps run in `.github/workflows/ci.yml`,
+  which also starts Neo4j so the contract suite runs on both backends).
 
 ## Architecture
 - `backend/app.py` — `create_app()` + lifespan (`init_db()`, graph singleton on
@@ -24,7 +25,8 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
 - `backend/exceptions.py` — `EchoGraphError` tree (config/graph/validation/ingestion/
   extraction/provider/transcription/auth). Service errors subclass it; routes map to HTTP.
 - `backend/api/graph.py` — nodes CRUD + merge/update, `GET /nodes` (`limit`/`offset`),
-  `GET /search`, `POST /edges`, `DELETE /edges/{id}`, neighbors, `GET+POST /query`,
+  `GET /search`, `POST /edges`, `DELETE /edges/{id}`, neighbors, history timeline,
+  unresolved questions, `GET+POST /query`,
   subgraph, export, lineage, statistics.
 - `backend/services/graph_ops.py` — `add_edge_validated()` is the single choke point
   for edge writes (endpoint existence + `validate_edge()`); routes and workers must use
@@ -53,7 +55,8 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
   local mode 501 without `faster-whisper`; `MAX_AUDIO_BYTES` cap; full transcript metadata).
 - `backend/services/query.py` + `retrieval.py` — hybrid retriever (keyword ∪ semantic
   + graph-connectedness bonus, ranked with reasons) over `Retriever` protocol;
-  `answer_query()` honoring `node_type`/`ingestion_id` filters. Pass `CompleteText`
+  `answer_query()` honoring `node_type`/`ingestion_id` filters. `find_unresolved_questions()`
+  lists QUESTION nodes with no incoming ANSWERS edge. Pass `CompleteText`
   (`get_answer_complete`, None without `OPENAI_API_KEY` → retrieval-only) for grounded
   LLM answers parsed into `AnswerPayload` (answer/citations/uncertainties/conflicts;
   plain-text degrades gracefully, failures abstain). The LLM is never called on empty
@@ -61,6 +64,9 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
   `[Title]` → node IDs; `include_evidence` returns citable `evidence` items;
   `explain=true` returns retrieval debug. Prompts separate SYSTEM/TASK/CONTEXT;
   source text is untrusted data.
+- `backend/services/history.py` — `get_decision_history()` BFS over explicit
+  SUPERSEDES/CONTRADICTS edges (bounded depth, both directions); never inferred
+  from ingestion order.
 - `backend/services/notifications.py` — deterministic post-extraction rules:
   CONTRADICTS edge → HIGH CONTRADICTION; ownerless ACTION_ITEM/DECISION →
   MEDIUM MISSING_OWNER (ownership: OWNS/DECIDED_BY/ASSIGNED_TO/DECIDES). Rows carry

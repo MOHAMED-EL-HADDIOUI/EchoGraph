@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.deps import get_answer_complete, get_embedder, get_graph_manager
 from backend.graph.manager import GraphManager
 from backend.models.knowledge_graph import (
+    DecisionHistory,
     GraphData,
     GraphQuery,
     GraphQueryResult,
@@ -19,7 +20,13 @@ from backend.services.graph_ops import (
     NodeNotFoundError,
     add_edge_validated,
 )
-from backend.services.query import CompleteText, answer_query, explain_node
+from backend.services.history import get_decision_history
+from backend.services.query import (
+    CompleteText,
+    answer_query,
+    explain_node,
+    find_unresolved_questions,
+)
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -218,6 +225,38 @@ async def read_lineage(
     if lineage is None:
         raise HTTPException(status_code=404, detail="Node not found")
     return lineage
+
+
+@router.get(
+    "/nodes/{node_id}/history",
+    response_model=DecisionHistory,
+    summary="How did this decision evolve?",
+    description="Bounded timeline over explicit SUPERSEDES/CONTRADICTS edges in "
+    "both directions. Never inferred from ingestion order.",
+)
+async def read_history(
+    node_id: str,
+    depth: int = Query(default=3, ge=1, le=5),
+    graph: GraphManager = Depends(get_graph_manager),
+) -> DecisionHistory:
+    history = await get_decision_history(graph, node_id, depth=depth)
+    if history is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return history
+
+
+@router.get(
+    "/questions/unresolved",
+    response_model=list[KnowledgeNode],
+    summary="Questions with no answering edge",
+    description="Organizational gaps: QUESTION nodes nothing answers yet.",
+)
+async def read_unresolved_questions(
+    limit: int = Query(default=100, le=500),
+    offset: int = Query(default=0, ge=0),
+    graph: GraphManager = Depends(get_graph_manager),
+) -> list[KnowledgeNode]:
+    return await find_unresolved_questions(graph, limit=limit, offset=offset)
 
 
 @router.delete(

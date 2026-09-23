@@ -181,6 +181,23 @@ class NodeLineage(BaseModel):
     merged_from: list[str] = Field(default_factory=list)
 
 
+class HistoryEvent(BaseModel):
+    """One step in a decision's evolution timeline."""
+
+    relation: str  # supersedes | superseded_by | contradicts | contradicted_by
+    node: KnowledgeNode
+    edge_id: str = ""
+    quote: str = ""
+    ingestion_id: str = ""
+
+
+class DecisionHistory(BaseModel):
+    """How a decision evolved, from explicit SUPERSEDES/CONTRADICTS edges."""
+
+    node: KnowledgeNode
+    events: list[HistoryEvent] = Field(default_factory=list)
+
+
 class GraphQueryResult(BaseModel):
     """Result of a natural-language graph query."""
 

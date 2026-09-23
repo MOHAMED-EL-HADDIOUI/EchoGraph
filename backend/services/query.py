@@ -242,6 +242,24 @@ def resolve_citations(answer: str, nodes: list[KnowledgeNode]) -> list[str]:
     return [n.id for n in nodes if n.title.lower() in mentioned]
 
 
+async def find_unresolved_questions(
+    graph: GraphManager, limit: int = 100, offset: int = 0
+) -> list[KnowledgeNode]:
+    """QUESTION nodes with no incoming ANSWERS edge (anything answering them
+    counts as resolution, regardless of who answered). Bounded for safety."""
+    questions = await graph.get_all_nodes(node_type=NodeType.QUESTION)
+    unresolved = []
+    for node in questions:
+        try:
+            edges = await graph.get_edges(node.id)
+        except Exception:  # noqa: BLE001 — unreadable node counts as unresolved
+            edges = []
+        if not any(e.target_id == node.id and e.edge_type == EdgeType.ANSWERS for e in edges):
+            unresolved.append(node)
+    unresolved.sort(key=lambda n: n.title)
+    return unresolved[offset : offset + limit]
+
+
 async def explain_node(graph: GraphManager, node_id: str) -> NodeLineage | None:
     """Deterministic lineage: node → evidence → ingestion → extraction run."""
     node = await graph.get_node(node_id)
