@@ -49,9 +49,11 @@ class Neo4jGraphManager(GraphManager):
 
     @staticmethod
     def _serialize_props(data: dict) -> dict:
-        """Flatten non-primitive props: Neo4j rejects nested maps."""
+        """Flatten non-primitive props: Neo4j rejects nested maps/lists of maps."""
         if isinstance(data.get("metadata"), dict):
             data["metadata"] = json.dumps(data["metadata"])
+        if isinstance(data.get("evidence"), list):
+            data["evidence"] = json.dumps(data["evidence"], default=str)
         return data
 
     @staticmethod
@@ -61,6 +63,11 @@ class Neo4jGraphManager(GraphManager):
                 data["metadata"] = json.loads(data["metadata"])
             except ValueError:
                 data["metadata"] = {}
+        if isinstance(data.get("evidence"), str):
+            try:
+                data["evidence"] = json.loads(data["evidence"])
+            except ValueError:
+                data["evidence"] = []
         return data
 
     # ── mutations ───────────────────────────────────────────────

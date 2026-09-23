@@ -54,8 +54,9 @@ async def test_notifications_not_duplicated_on_reprocess(client):
         first = r.json()["job_id"]
         await client.post(f"/ingestion/{first}/process")
 
-        r = await client.post("/ingestion", json={"source_type": "MEETING", "content": "x"})
-        r = await client.post(f"/ingestion/{r.json()['job_id']}/process")
+        # Same ingestion reprocessed: idempotent no-op, zero new notifications.
+        r = await client.post(f"/ingestion/{first}/process")
+        assert r.json()["status"] == "COMPLETED"
         assert r.json()["notifications_created"] == 0
 
         r = await client.get("/notifications")

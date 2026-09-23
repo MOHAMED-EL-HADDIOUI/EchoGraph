@@ -1,0 +1,128 @@
+{
+  "cases": [
+    {
+      "case_id": "conflicting-decisions",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
+      "case_id": "open-question",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
+      "case_id": "ownerless-actions",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
+      "case_id": "repeated-information",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
+      "case_id": "shared-topic",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
+      "case_id": "standup-meeting",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "errors": [],
+        "passed": true
+      }
+    },
+    {
+      "case_id": "supersede-dispute",
+      "metrics": {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "owner_precision": 1.0,
+        "owner_recall": 1.0,
+        "decision_recall": 1.0,
+        "contradiction_recall": 1.0,
+        "fabricated": [],
+        "errors": [],
+        "passed": true
+      }
+    }
+  ],
+  "totals": {
+    "node_precision": 1.0,
+    "node_recall": 1.0,
+    "edge_precision": 1.0,
+    "edge_recall": 1.0,
+    "owner_precision": 1.0,
+    "owner_recall": 1.0,
+    "decision_recall": 1.0,
+    "contradiction_recall": 1.0,
+    "fabricated_total": 0.0
+  },
+  "passed": true
+}

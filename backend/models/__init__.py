@@ -1,5 +1,6 @@
 from backend.models.ingestion import (
     Document,
+    IngestionJobRead,
     IngestionRequest,
     IngestionResult,
     IngestionStatus,
@@ -7,26 +8,33 @@ from backend.models.ingestion import (
 )
 from backend.models.knowledge_graph import (
     EdgeType,
+    Evidence,
+    EvidenceItem,
     GraphData,
     GraphQuery,
     GraphQueryResult,
     KnowledgeEdge,
     KnowledgeNode,
     NodeType,
+    Verdict,
 )
 from backend.models.notifications import (
     Notification,
     NotificationCreate,
     NotificationPriority,
+    NotificationRead,
     NotificationType,
 )
 
 __all__ = [
     "Document",
     "EdgeType",
+    "Evidence",
+    "EvidenceItem",
     "GraphData",
     "GraphQuery",
     "GraphQueryResult",
+    "IngestionJobRead",
     "IngestionRequest",
     "IngestionResult",
     "IngestionStatus",
@@ -36,6 +44,8 @@ __all__ = [
     "Notification",
     "NotificationCreate",
     "NotificationPriority",
+    "NotificationRead",
     "NotificationType",
     "SourceType",
+    "Verdict",
 ]

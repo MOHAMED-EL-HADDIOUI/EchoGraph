@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 from collections.abc import Awaitable, Callable
+
+from backend import obs
+
+logger = logging.getLogger(__name__)
 
 # Async callable taking an audio file path and returning transcript text.
 TranscribePath = Callable[[str], Awaitable[str]]
@@ -40,8 +46,18 @@ async def transcribe_local(path: str, model: str = "base") -> str:
 
 def make_transcriber(mode: str, api_key: str) -> TranscribePath:
     async def transcribe(path: str) -> str:
-        if mode == "local":
-            return await transcribe_local(path)
-        return await transcribe_api(path, api_key)
+        timer = obs.Timer()
+        text = (
+            await transcribe_local(path) if mode == "local" else await transcribe_api(path, api_key)
+        )
+        obs.log_event(
+            logger,
+            "transcription.finish",
+            mode=mode,
+            audio_bytes=os.path.getsize(path),
+            transcript_chars=len(text),
+            latency_ms=round(timer.elapsed_ms(), 1),
+        )
+        return text
 
     return transcribe

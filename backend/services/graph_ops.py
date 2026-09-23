@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
+
+from backend import obs
 from backend.graph.manager import GraphManager
 from backend.graph.schema import validate_edge
 from backend.models.knowledge_graph import KnowledgeEdge
+
+logger = logging.getLogger(__name__)
 
 
 class NodeNotFoundError(ValueError):
@@ -27,4 +32,13 @@ async def add_edge_validated(graph: GraphManager, edge: KnowledgeEdge) -> Knowle
         raise InvalidEdgeError(
             f"Invalid edge: {source.type.value} -{edge.edge_type.value}-> {target.type.value}"
         )
-    return await graph.add_edge(edge)
+    created = await graph.add_edge(edge)
+    obs.log_event(
+        logger,
+        "graph.edge_added",
+        level=logging.DEBUG,
+        edge_type=edge.edge_type.value,
+        source_type=source.type.value,
+        target_type=target.type.value,
+    )
+    return created

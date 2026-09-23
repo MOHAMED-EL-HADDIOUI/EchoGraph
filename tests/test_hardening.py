@@ -50,3 +50,31 @@ async def test_slow_llm_chunk_times_out(tmp_graph, monkeypatch):
     result = await run_extraction(tmp_graph, "hello", slow_complete)
     assert result.nodes_created == 0
     assert any("timed out" in e for e in result.errors)
+
+
+async def test_invalid_node_payload_rejected(client):
+    r = await client.post("/graph/nodes", json={"type": "DECISION"})
+    assert r.status_code == 422
+    r = await client.post("/graph/nodes", json={"type": "NOT_A_TYPE", "title": "x"})
+    assert r.status_code == 422
+
+
+async def test_missing_resources_return_404(client):
+    assert (await client.get("/graph/nodes/does-not-exist")).status_code == 404
+    assert (await client.delete("/graph/nodes/does-not-exist")).status_code == 404
+    assert (await client.get("/graph/nodes/does-not-exist/edges")).status_code == 404
+    assert (await client.get("/graph/nodes/does-not-exist/subgraph")).status_code == 404
+    assert (
+        await client.post(
+            "/graph/edges",
+            json={"source_id": "a", "target_id": "b", "edge_type": "OWNS"},
+        )
+    ).status_code == 404
+    assert (await client.get("/ingestion/does-not-exist")).status_code == 404
+    assert (await client.post("/ingestion/does-not-exist/process")).status_code == 404
+    assert (await client.patch("/notifications/does-not-exist/read")).status_code == 404
+
+
+async def test_invalid_edge_payload_rejected(client):
+    r = await client.post("/graph/edges", json={"source_id": "a"})
+    assert r.status_code == 422

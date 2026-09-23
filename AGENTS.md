@@ -28,22 +28,37 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
 - `backend/services/extraction.py` — sync LLM extraction. `CompleteJson` seam
   `(system, user) -> dict`; `run_extraction()` returns `ExtractionResult` and never
   raises on bad LLM output (caps errors at `MAX_ERRORS`, per-chunk timeout via
-  `EXTRACTION_TIMEOUT_S`), dedupes by `(type, title)` via `merge_node`, optionally
-  by embedding cosine (`embed_texts` + `ENABLE_EMBEDDING_DEDUP`, threshold
-  `EMBEDDING_DEDUP_THRESHOLD`).
+  `EXTRACTION_TIMEOUT_S`), rejects empty titles, dedupes by `(type, title)` via
+  `merge_node`, optionally by embedding cosine (`embed_texts` +
+  `ENABLE_EMBEDDING_DEDUP`, threshold `EMBEDDING_DEDUP_THRESHOLD`). Every node
+  gets `evidence[]` (`ingestion_id` + source `quote`, appended on merge);
+  every edge gets `ingestion_id` + quote. Pass `ingestion_id` from the caller.
   Ingestion flow: `POST /ingestion` (stores `content`, PENDING; 413 over
-  `MAX_INGESTION_CHARS`) → `POST /ingestion/{id}/process` (runs extraction inline,
-  COMPLETED/FAILED, then `generate_notifications()`; response carries
+  `MAX_INGESTION_CHARS`) → `POST /ingestion/{id}/process` (idempotent:
+  COMPLETED returns stored outcome, PROCESSING 409, attempts counted; runs
+  extraction inline, then `generate_notifications()`; response carries
   `notifications_created`). Audio via `POST /ingestion/transcribe`
   (`services/transcription.py`; api mode needs key, local mode 501 without
   `faster-whisper`; 25 MB cap).
 - `backend/services/query.py` — `answer_query()` honoring `{"node_type": ...}`
   filter. Pass `CompleteText` (`get_answer_complete`, None without
   `OPENAI_API_KEY` → retrieval-only) for grounded LLM answers over formatted
-  node/edge context.
+  node/edge context (must cite `[Title]`, abstains without context; the LLM is
+  never called on empty retrieval). `verdict` ∈ supported/uncertain/
+  contradictory; `citations` resolve `[Title]` → node IDs; `include_evidence`
+  returns citable `evidence` items.
 - `backend/services/notifications.py` — deterministic post-extraction rules:
   CONTRADICTS edge → HIGH CONTRADICTION; ownerless ACTION_ITEM/DECISION →
-  MEDIUM MISSING_OWNER. Skips anything an unread notification already covers.
+  MEDIUM MISSING_OWNER. Rows carry severity, `ingestion_id`, `evidence_ids`,
+  `read_at`; dedupe via `find_duplicate()` (same type + nodes + ingestion,
+  unread only). Pass `ingestion_id` from the caller.
+- `backend/services/evaluation.py` + `eval/cases/*.json` + `python -m echograph.eval`
+  → `reports/eval.json` (node/edge P-R, owner/decision/contradiction recall,
+  fabricated list; case passes only on perfect scores). Docs: `docs/evaluation.md`.
+- `backend/obs.py` — `request_id` context var + middleware (echoes `X-Request-ID`),
+  `log_event()` (structured, lengths/hashes only — never raw transcripts;
+  `fingerprint()` for content identity), `Timer`, LLM usage logging.
+  `docs/architecture.md` has the pipeline diagram.
 - `backend/database.py` — async SQLAlchemy, `init_db()` at startup. JSON in `Text`
   columns; `ingestion_jobs` stores raw `content`. Schema changes go through
   Alembic (`alembic revision --autogenerate`, `alembic upgrade head` shares
@@ -53,9 +68,10 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
 
 ## Neo4j gotchas (verified by smoke test, don't regress)
 - Cypher 5: use `CREATE (n:Label) SET n = $props`, never `CREATE (n:Label $props)`.
-- `metadata` dicts are JSON-stringified on write, parsed on read
-  (`_serialize_props`/`_deserialize_props`/`_record_to_edge`); embeddings round-trip
-  as float arrays — `find_similar_nodes` depends on reading them back (pure-Python cosine).
+- `metadata` dicts and node `evidence` lists are JSON-stringified on write,
+  parsed on read (`_serialize_props`/`_deserialize_props`/`_record_to_edge`);
+  embeddings round-trip as float arrays — `find_similar_nodes` depends on
+  reading them back (pure-Python cosine).
 - Always `await result.consume()` on fire-and-forget writes, else Cypher errors
   surface nowhere.
 - `depth` in `get_subgraph` is f-string-interpolated (Cypher has no bind param for
@@ -69,4 +85,8 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
 - Tests: `tests/conftest.py` overrides graph (tmp JSON) + DB (tmp sqlite); never hit
   real services — inject fakes via `app.dependency_overrides`.
   `tests/test_eval_quality.py` is the frozen quality set (transcript → recorded LLM
-  payload → expected graph); prompt tweaks must keep it green.
+  payload → expected graph); prompt tweaks must keep it green. New eval cases go
+  in `eval/cases/*.json` (run via `python -m echograph.eval` or
+  `tests/test_evaluation.py`).
+- API responses use `IngestionJobRead` / `NotificationRead` models (not dicts);
+  keep field names stable — tests and the eval report depend on them.

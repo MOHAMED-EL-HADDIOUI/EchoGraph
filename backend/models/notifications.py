@@ -46,3 +46,20 @@ class NotificationCreate(BaseModel):
     message: str = ""
     related_node_ids: list[str] = Field(default_factory=list)
     metadata: dict = Field(default_factory=dict)
+
+
+class NotificationRead(BaseModel):
+    """API view of a persisted notification."""
+
+    id: str
+    type: str
+    priority: str
+    severity: str
+    title: str
+    message: str = ""
+    related_node_ids: list[str] = Field(default_factory=list)
+    ingestion_id: str = ""
+    evidence_ids: list[str] = Field(default_factory=list)
+    is_read: bool = False
+    created_at: dt.datetime | None = None
+    read_at: dt.datetime | None = None

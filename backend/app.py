@@ -12,6 +12,7 @@ from backend.config import settings
 from backend.database import init_db
 from backend.deps import require_api_key
 from backend.graph.manager import create_graph_manager
+from backend.obs import request_id_middleware
 
 
 @asynccontextmanager
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="EchoGraph", version="0.1.0", lifespan=lifespan)
+    app.middleware("http")(request_id_middleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,

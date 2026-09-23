@@ -8,9 +8,16 @@ from collections.abc import Awaitable, Callable
 
 from pydantic import BaseModel, Field, ValidationError
 
+from backend import obs
 from backend.config import settings
 from backend.graph.manager import GraphManager
-from backend.models.knowledge_graph import EdgeType, KnowledgeEdge, KnowledgeNode, NodeType
+from backend.models.knowledge_graph import (
+    EdgeType,
+    Evidence,
+    KnowledgeEdge,
+    KnowledgeNode,
+    NodeType,
+)
 from backend.services.graph_ops import InvalidEdgeError, NodeNotFoundError, add_edge_validated
 
 logger = logging.getLogger(__name__)
@@ -25,15 +32,24 @@ SYSTEM_PROMPT = """\
 You extract a knowledge graph from organizational text (meetings, chat, email).
 Return JSON only, exactly: {"nodes": [...], "edges": [...]}.
 Node: {"type": one of DECISION RATIONALE QUESTION PERSON TOPIC DOCUMENT ACTION_ITEM,
-"title": short label, "content": one-sentence detail, "confidence": 0.0-1.0}.
+"title": short label, "content": one-sentence detail, "confidence": 0.0-1.0,
+"quote": exact substring of the text supporting this node, or ""}.
 Edge: {"source_title": exact title of a node above, "target_title": exact title of a \
 node above, "edge_type": one of DECIDED_BY RELATES_TO CONTRADICTS SUPERSEDES OWNS \
 BLOCKED_BY REFERENCES DERIVED_FROM ANSWERS, "evidence": short quote or ""}.
-Prefer few high-confidence nodes over many guesses. Every edge endpoint must match a \
-node title exactly.
+Rules: only extract facts stated in the text. Never invent quotes: use an exact \
+substring or leave the quote empty. Prefer few high-confidence nodes over many guesses. \
+Every edge endpoint must match a node title exactly.
 """
 
 MAX_ERRORS = 20
+
+
+def merge_evidence(existing: list[Evidence], new: Evidence) -> list[Evidence]:
+    """Append provenance, deduplicated by (ingestion_id, quote)."""
+    if (new.ingestion_id, new.quote) not in {(e.ingestion_id, e.quote) for e in existing}:
+        return [*existing, new]
+    return existing
 
 
 class ExtractedNode(BaseModel):
@@ -41,6 +57,7 @@ class ExtractedNode(BaseModel):
     title: str
     content: str = ""
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    quote: str = ""
 
 
 class ExtractedEdge(BaseModel):
@@ -79,6 +96,7 @@ def make_openai_complete(model: str, api_key: str) -> CompleteJson:
     async def complete(system: str, user: str) -> dict:
         from openai import AsyncOpenAI
 
+        timer = obs.Timer()
         client = AsyncOpenAI(api_key=api_key)
         resp = await client.chat.completions.create(
             model=model,
@@ -88,6 +106,14 @@ def make_openai_complete(model: str, api_key: str) -> CompleteJson:
             ],
             response_format={"type": "json_object"},
             temperature=0,
+        )
+        usage = getattr(resp, "usage", None)
+        obs.log_event(
+            logger,
+            "llm.complete",
+            model=model,
+            latency_ms=round(timer.elapsed_ms(), 1),
+            usage=usage.model_dump() if usage is not None else None,
         )
         return json.loads(resp.choices[0].message.content or "{}")
 
@@ -100,8 +126,18 @@ def make_openai_embeddings(model: str, api_key: str) -> EmbedTexts:
     async def embed(texts: list[str]) -> list[list[float]]:
         from openai import AsyncOpenAI
 
+        timer = obs.Timer()
         client = AsyncOpenAI(api_key=api_key)
         resp = await client.embeddings.create(model=model, input=texts)
+        usage = getattr(resp, "usage", None)
+        obs.log_event(
+            logger,
+            "llm.embed",
+            model=model,
+            latency_ms=round(timer.elapsed_ms(), 1),
+            texts=len(texts),
+            usage=usage.model_dump() if usage is not None else None,
+        )
         return [list(d.embedding) for d in resp.data]
 
     return embed
@@ -123,15 +159,27 @@ async def run_extraction(
     complete_json: CompleteJson,
     source_type: str | None = None,
     embed_texts: EmbedTexts | None = None,
+    ingestion_id: str | None = None,
 ) -> ExtractionResult:
     """Extract nodes/edges from content into the graph.
 
     Never raises on bad LLM output: problems are collected into errors
-    (capped at MAX_ERRORS). When ``embed_texts`` is given, new nodes are
-    embedded and deduplicated by cosine similarity before exact-title matching
-    falls through to ``add_node``.
+    (capped at MAX_ERRORS). Every created node/edge carries provenance
+    (ingestion id + source quote). Facts without support are rejected, not
+    fabricated. When ``embed_texts`` is given, new nodes are embedded and
+    deduplicated by cosine similarity before exact-title matching falls
+    through to ``add_node``.
     """
     result = ExtractionResult()
+    timer = obs.Timer()
+    chunks = chunk_text(content)
+    obs.log_event(
+        logger,
+        "extraction.start",
+        chunks=len(chunks),
+        content_chars=len(content),
+        content_sha=obs.fingerprint(content),
+    )
 
     def record(msg: str) -> None:
         if len(result.errors) < MAX_ERRORS:
@@ -146,7 +194,8 @@ async def run_extraction(
     for existing in await graph.get_all_nodes():
         by_title.setdefault((existing.type.value, existing.title.lower()), existing)
 
-    for chunk in chunk_text(content):
+    for chunk_index, chunk in enumerate(chunks):
+        chunk_timer = obs.Timer()
         try:
             raw = await asyncio.wait_for(
                 complete_json(SYSTEM_PROMPT, chunk),
@@ -159,9 +208,25 @@ async def run_extraction(
         except ValidationError as exc:
             record(f"invalid extraction payload: {exc}")
             continue
+        obs.log_event(
+            logger,
+            "extraction.chunk",
+            level=logging.DEBUG,
+            chunk_index=chunk_index,
+            chunk_chars=len(chunk),
+            latency_ms=round(chunk_timer.elapsed_ms(), 1),
+        )
 
         for item in extracted.nodes:
+            if not item.title.strip():
+                record("rejected node with empty title (unsupported fact)")
+                continue
             key = (item.type.value, item.title.lower())
+            provenance = Evidence(
+                ingestion_id=ingestion_id or "",
+                quote=item.quote,
+                confidence=item.confidence,
+            )
             if key in by_title:
                 try:
                     by_title[key] = await graph.merge_node(
@@ -172,6 +237,7 @@ async def run_extraction(
                             content=item.content or by_title[key].content,
                             source_type=source_type,
                             confidence=item.confidence,
+                            evidence=merge_evidence(by_title[key].evidence, provenance),
                         ),
                     )
                 except ValueError as exc:
@@ -200,6 +266,7 @@ async def run_extraction(
                                 content=item.content or match.content,
                                 source_type=source_type,
                                 confidence=item.confidence,
+                                evidence=merge_evidence(match.evidence, provenance),
                             ),
                         )
                         by_title[key] = merged
@@ -212,9 +279,11 @@ async def run_extraction(
                         type=item.type,
                         title=item.title,
                         content=item.content,
+                        source_ref=ingestion_id,
                         source_type=source_type,
                         confidence=item.confidence,
                         embedding=vec,
+                        evidence=[provenance],
                     )
                 )
                 by_title[key] = node
@@ -226,8 +295,10 @@ async def run_extraction(
                     type=item.type,
                     title=item.title,
                     content=item.content,
+                    source_ref=ingestion_id,
                     source_type=source_type,
                     confidence=item.confidence,
+                    evidence=[provenance],
                 )
             )
             by_title[key] = node
@@ -254,6 +325,7 @@ async def run_extraction(
                         target_id=tgt.id,
                         edge_type=item.edge_type,
                         evidence=item.evidence or None,
+                        ingestion_id=ingestion_id,
                         created_at=dt.datetime.utcnow(),
                     ),
                 )
@@ -266,4 +338,12 @@ async def run_extraction(
     result.edges_created = edges_created
     result.nodes = created_nodes
     result.edges = created_edges
+    obs.log_event(
+        logger,
+        "extraction.finish",
+        nodes=nodes_created,
+        edges=edges_created,
+        errors=len(result.errors),
+        latency_ms=round(timer.elapsed_ms(), 1),
+    )
     return result

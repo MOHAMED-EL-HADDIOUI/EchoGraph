@@ -44,6 +44,24 @@ class IngestionResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class IngestionJobRead(BaseModel):
+    """API view of a persisted ingestion job."""
+
+    job_id: str
+    source_type: str
+    status: str
+    nodes_created: int = 0
+    edges_created: int = 0
+    title: str = ""
+    error: str = ""
+    attempts: int = 0
+    metadata: dict = Field(default_factory=dict)
+    created_at: dt.datetime | None = None
+    completed_at: dt.datetime | None = None
+    # Set only by the process endpoint; 0 elsewhere.
+    notifications_created: int = 0
+
+
 class Document(BaseModel):
     """Normalised intermediate representation used by connectors."""
 

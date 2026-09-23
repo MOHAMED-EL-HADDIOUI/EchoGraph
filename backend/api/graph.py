@@ -22,7 +22,13 @@ from backend.services.query import CompleteText, answer_query
 router = APIRouter(prefix="/graph", tags=["graph"])
 
 
-@router.post("/nodes", response_model=KnowledgeNode)
+@router.post(
+    "/nodes",
+    response_model=KnowledgeNode,
+    summary="Create a graph node",
+    description="Adds one node. Provenance (`evidence`, `source_ref`) is normally "
+    "attached by extraction, but direct writes are allowed.",
+)
 async def create_node(
     node: KnowledgeNode, graph: GraphManager = Depends(get_graph_manager)
 ) -> KnowledgeNode:
@@ -59,7 +65,7 @@ async def merge_into_node(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/nodes", response_model=list[KnowledgeNode])
+@router.get("/nodes", response_model=list[KnowledgeNode], summary="List nodes (paginated)")
 async def list_nodes(
     node_type: NodeType | None = None,
     limit: int = Query(default=100, le=500),
@@ -70,7 +76,11 @@ async def list_nodes(
     return nodes[offset : offset + limit]
 
 
-@router.get("/search", response_model=list[KnowledgeNode])
+@router.get(
+    "/search",
+    response_model=list[KnowledgeNode],
+    summary="Keyword search over node titles and content",
+)
 async def search(
     q: str,
     node_type: NodeType | None = None,
@@ -80,7 +90,15 @@ async def search(
     return await graph.search_nodes(q, node_type=node_type, limit=limit)
 
 
-@router.post("/query", response_model=GraphQueryResult)
+@router.post(
+    "/query",
+    response_model=GraphQueryResult,
+    summary="Ask the graph, with evidence",
+    description="Keyword retrieval plus an optional grounded LLM answer. Set "
+    "`include_evidence=true` for citable provenance items; `verdict` reports "
+    "supported / uncertain / contradictory; `citations` resolves `[Title]` "
+    "references in the answer to node IDs.",
+)
 async def query_graph(
     query: GraphQuery,
     graph: GraphManager = Depends(get_graph_manager),
@@ -89,7 +107,13 @@ async def query_graph(
     return await answer_query(graph, query, answer_text)
 
 
-@router.post("/edges", response_model=KnowledgeEdge)
+@router.post(
+    "/edges",
+    response_model=KnowledgeEdge,
+    summary="Create a validated edge",
+    description="Endpoints must exist (404) and the (source, edge, target) triple "
+    "must satisfy VALID_EDGES — except RELATES_TO, which is open-schema (400 otherwise).",
+)
 async def create_edge(
     edge: KnowledgeEdge, graph: GraphManager = Depends(get_graph_manager)
 ) -> KnowledgeEdge:
@@ -111,7 +135,11 @@ async def read_edges(
     return await graph.get_edges(node_id)
 
 
-@router.get("/nodes/{node_id}/subgraph", response_model=GraphData)
+@router.get(
+    "/nodes/{node_id}/subgraph",
+    response_model=GraphData,
+    summary="Neighborhood subgraph up to depth (1-5)",
+)
 async def read_subgraph(
     node_id: str,
     depth: int = Query(default=2, ge=1, le=5),

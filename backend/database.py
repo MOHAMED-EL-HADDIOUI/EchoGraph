@@ -29,6 +29,7 @@ class IngestionJobRow(Base):
     title: Mapped[str] = mapped_column(String(500), default="")
     content: Mapped[str] = mapped_column(Text, default="")
     error: Mapped[str] = mapped_column(Text, default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
     completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
@@ -40,15 +41,23 @@ class NotificationRow(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     type: Mapped[str] = mapped_column(String(30))
     priority: Mapped[str] = mapped_column(String(10), default="MEDIUM")
+    severity: Mapped[str] = mapped_column(String(10), default="MEDIUM")
     title: Mapped[str] = mapped_column(String(500))
     message: Mapped[str] = mapped_column(Text, default="")
     node_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+    ingestion_id: Mapped[str] = mapped_column(String(36), default="")
+    evidence_ids_json: Mapped[str] = mapped_column(Text, default="[]")
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    read_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     @property
     def related_node_ids(self) -> list[str]:
         return json.loads(self.node_ids_json)
+
+    @property
+    def evidence_ids(self) -> list[str]:
+        return json.loads(self.evidence_ids_json or "[]")
 
 
 # ── Engine / session ────────────────────────────────────────────
