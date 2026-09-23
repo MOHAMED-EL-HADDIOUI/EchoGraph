@@ -89,26 +89,38 @@ def make_openai_complete(model: str, api_key: str) -> CompleteJson:
     return complete
 
 
+class ExtractionResult(BaseModel):
+    """Outcome of a single extraction run, including created objects."""
+
+    nodes_created: int = 0
+    edges_created: int = 0
+    errors: list[str] = Field(default_factory=list)
+    nodes: list[KnowledgeNode] = Field(default_factory=list)
+    edges: list[KnowledgeEdge] = Field(default_factory=list)
+
+
 async def run_extraction(
     graph: GraphManager,
     content: str,
     complete_json: CompleteJson,
     source_type: str | None = None,
-) -> tuple[int, int, list[str]]:
+) -> ExtractionResult:
     """Extract nodes/edges from content into the graph.
 
-    Returns (nodes_created, edges_created, errors). Never raises on bad
-    LLM output: problems are collected into errors (capped at MAX_ERRORS).
+    Never raises on bad LLM output: problems are collected into errors
+    (capped at MAX_ERRORS).
     """
-    errors: list[str] = []
+    result = ExtractionResult()
 
     def record(msg: str) -> None:
-        if len(errors) < MAX_ERRORS:
-            errors.append(msg)
+        if len(result.errors) < MAX_ERRORS:
+            result.errors.append(msg)
         logger.warning("extraction: %s", msg)
 
     nodes_created = 0
     edges_created = 0
+    created_nodes: list[KnowledgeNode] = []
+    created_edges: list[KnowledgeEdge] = []
     by_title: dict[tuple[str, str], KnowledgeNode] = {}
     for existing in await graph.get_all_nodes():
         by_title.setdefault((existing.type.value, existing.title.lower()), existing)
@@ -149,6 +161,7 @@ async def run_extraction(
             )
             by_title[key] = node
             nodes_created += 1
+            created_nodes.append(node)
 
         for item in extracted.edges:
             src = next(
@@ -163,7 +176,7 @@ async def run_extraction(
                 )
                 continue
             try:
-                await add_edge_validated(
+                created = await add_edge_validated(
                     graph,
                     KnowledgeEdge(
                         source_id=src.id,
@@ -174,7 +187,12 @@ async def run_extraction(
                     ),
                 )
                 edges_created += 1
+                created_edges.append(created)
             except (InvalidEdgeError, NodeNotFoundError) as exc:
                 record(f"edge skipped: {exc}")
 
-    return nodes_created, edges_created, errors
+    result.nodes_created = nodes_created
+    result.edges_created = edges_created
+    result.nodes = created_nodes
+    result.edges = created_edges
+    return result

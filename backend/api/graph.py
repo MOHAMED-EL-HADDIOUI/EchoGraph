@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from backend.deps import get_graph_manager
+from backend.deps import get_answer_complete, get_graph_manager
 from backend.graph.manager import GraphManager
 from backend.models.knowledge_graph import (
     GraphData,
@@ -17,7 +17,7 @@ from backend.services.graph_ops import (
     NodeNotFoundError,
     add_edge_validated,
 )
-from backend.services.query import answer_query
+from backend.services.query import CompleteText, answer_query
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -82,9 +82,11 @@ async def search(
 
 @router.post("/query", response_model=GraphQueryResult)
 async def query_graph(
-    query: GraphQuery, graph: GraphManager = Depends(get_graph_manager)
+    query: GraphQuery,
+    graph: GraphManager = Depends(get_graph_manager),
+    answer_text: CompleteText | None = Depends(get_answer_complete),
 ) -> GraphQueryResult:
-    return await answer_query(graph, query)
+    return await answer_query(graph, query, answer_text)
 
 
 @router.post("/edges", response_model=KnowledgeEdge)

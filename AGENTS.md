@@ -26,9 +26,15 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
   `(system, user) -> dict`; `run_extraction()` never raises on bad LLM output
   (caps errors at `MAX_ERRORS`), dedupes by `(type, title)` via `merge_node`.
   Ingestion flow: `POST /ingestion` (stores `content`, PENDING) →
-  `POST /ingestion/{id}/process` (runs extraction inline, COMPLETED/FAILED).
-- `backend/services/query.py` — keyword `answer_query()` honoring
-  `{"node_type": ...}` filter; `answer` stays `None` until the LLM step lands.
+  `POST /ingestion/{id}/process` (runs extraction inline, COMPLETED/FAILED,
+  then `generate_notifications()`; response carries `notifications_created`).
+- `backend/services/query.py` — `answer_query()` honoring `{"node_type": ...}`
+  filter. Pass `CompleteText` (`get_answer_complete`, None without
+  `OPENAI_API_KEY` → retrieval-only) for grounded LLM answers over formatted
+  node/edge context.
+- `backend/services/notifications.py` — deterministic post-extraction rules:
+  CONTRADICTS edge → HIGH CONTRADICTION; ownerless ACTION_ITEM/DECISION →
+  MEDIUM MISSING_OWNER. Skips anything an unread notification already covers.
 - `backend/database.py` — async SQLAlchemy, `init_db()` at startup. JSON in `Text`
   columns; `ingestion_jobs` stores raw `content`. No migrations yet: delete
   `echograph.db` after model changes.

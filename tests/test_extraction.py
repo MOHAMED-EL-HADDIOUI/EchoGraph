@@ -50,6 +50,7 @@ async def test_process_job_end_to_end(client):
         assert body["status"] == "COMPLETED"
         assert body["nodes_created"] == 2
         assert body["edges_created"] == 1  # OWNS triple invalid, skipped
+        assert body["notifications_created"] == 0  # DECISION has DECIDED_BY owner
         assert body["error"] != ""
 
         r = await client.get("/graph/search", params={"q": "ship"})
@@ -90,17 +91,26 @@ async def test_process_job_requires_api_key_without_override(client, monkeypatch
 
 
 async def test_query_endpoint(client):
-    await client.post("/graph/nodes", json={"type": "PERSON", "title": "Ada Lovelace"})
-    await client.post("/graph/nodes", json={"type": "TOPIC", "title": "Unrelated"})
-    r = await client.post("/graph/query", json={"query": "ada"})
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert any(n["title"] == "Ada Lovelace" for n in body["nodes"])
-    assert body["answer"] is None
-    assert body["confidence"] > 0
+    from backend.app import app
+    from backend.deps import get_answer_complete
 
-    r = await client.post("/graph/query", json={"query": "ada", "filters": {"node_type": "TOPIC"}})
-    assert all(n["type"] == "TOPIC" for n in r.json()["nodes"])
+    app.dependency_overrides[get_answer_complete] = lambda: None
+    try:
+        await client.post("/graph/nodes", json={"type": "PERSON", "title": "Ada Lovelace"})
+        await client.post("/graph/nodes", json={"type": "TOPIC", "title": "Unrelated"})
+        r = await client.post("/graph/query", json={"query": "ada"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert any(n["title"] == "Ada Lovelace" for n in body["nodes"])
+        assert body["answer"] is None
+        assert body["confidence"] > 0
+
+        r = await client.post(
+            "/graph/query", json={"query": "ada", "filters": {"node_type": "TOPIC"}}
+        )
+        assert all(n["type"] == "TOPIC" for n in r.json()["nodes"])
+    finally:
+        app.dependency_overrides.pop(get_answer_complete, None)
 
 
 async def test_list_nodes_pagination(client):

@@ -13,6 +13,7 @@ from backend.deps import get_extraction_complete, get_graph_manager
 from backend.graph.manager import GraphManager
 from backend.models.ingestion import IngestionRequest, IngestionStatus
 from backend.services.extraction import CompleteJson, run_extraction
+from backend.services.notifications import generate_notifications
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
@@ -82,7 +83,7 @@ async def process_job(
     row.status = IngestionStatus.PROCESSING.value
     await db.commit()
     try:
-        nodes, edges, errors = await run_extraction(
+        extracted = await run_extraction(
             graph, row.content, complete_json, source_type=row.source_type
         )
     except Exception as exc:  # noqa: BLE001 — any extraction failure becomes FAILED
@@ -92,13 +93,16 @@ async def process_job(
         await db.refresh(row)
         return _row_to_dict(row)
     row.status = IngestionStatus.COMPLETED.value
-    row.nodes_created = nodes
-    row.edges_created = edges
-    row.error = "\n".join(errors)[:2000]
+    row.nodes_created = extracted.nodes_created
+    row.edges_created = extracted.edges_created
+    row.error = "\n".join(extracted.errors)[:2000]
     row.completed_at = dt.datetime.utcnow()
     await db.commit()
     await db.refresh(row)
-    return _row_to_dict(row)
+    notifications = await generate_notifications(graph, db, extracted.nodes, extracted.edges)
+    body = _row_to_dict(row)
+    body["notifications_created"] = len(notifications)
+    return body
 
 
 @router.post("/{job_id}/complete", response_model=dict)
