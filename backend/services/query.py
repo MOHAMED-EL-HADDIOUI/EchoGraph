@@ -15,7 +15,10 @@ from backend.models.knowledge_graph import (
     GraphQueryResult,
     KnowledgeEdge,
     KnowledgeNode,
+    NodeLineage,
+    NodeOrigin,
     NodeType,
+    RetrievalInfo,
     Verdict,
 )
 from backend.services.extraction import EmbedTexts
@@ -170,7 +173,7 @@ async def answer_query(
             raw_answer = await answer_text(
                 ANSWER_SYSTEM, f"Question: {query.query}\n\nContext:\n{ctx}"
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — provider failure abstains safely
             raw_answer = ""
             uncertainties = [f"Answer provider failed: {exc}"]
             logger.warning("query.answer_failed: %s", exc)
@@ -241,8 +244,6 @@ def resolve_citations(answer: str, nodes: list[KnowledgeNode]) -> list[str]:
 
 async def explain_node(graph: GraphManager, node_id: str) -> NodeLineage | None:
     """Deterministic lineage: node → evidence → ingestion → extraction run."""
-    from backend.models.knowledge_graph import NodeLineage, NodeOrigin
-
     node = await graph.get_node(node_id)
     if node is None:
         return None

@@ -28,7 +28,7 @@ class IngestionJobRow(Base):
     edges_created: Mapped[int] = mapped_column(Integer, default=0)
     title: Mapped[str] = mapped_column(String(500), default="")
     content: Mapped[str] = mapped_column(Text, default="")
-    content_sha: Mapped[str] = mapped_column(String(64), default="")
+    content_sha: Mapped[str] = mapped_column(String(64), default="", server_default="")
     error: Mapped[str] = mapped_column(Text, default="")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")

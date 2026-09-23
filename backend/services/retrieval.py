@@ -125,7 +125,7 @@ class HybridRetriever:
         if self.semantic is not None:
             try:
                 sem = await self.semantic.search(graph, query, node_type, limit)
-            except Exception:
+            except Exception:  # noqa: BLE001 — semantic is best-effort, keyword stands
                 sem = []
             for ranked in sem:
                 if ranked.node.id in combined:
@@ -140,7 +140,7 @@ class HybridRetriever:
         for ranked in combined.values():
             try:
                 edges = await graph.get_edges(ranked.node.id)
-            except Exception:
+            except Exception:  # noqa: BLE001 — bonus skipped when edges unreadable
                 edges = []
             if any(e.source_id in ids or e.target_id in ids for e in edges):
                 ranked.score = round(ranked.score + 0.1, 3)

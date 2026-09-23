@@ -60,6 +60,8 @@ ignore = ["B008", "DTZ003"]
 # Graph backends do tolerant reads over persisted data: skip corrupt entries.
 "backend/graph/networkx_backend.py" = ["BLE001", "S110"]
 "backend/graph/neo4j_backend.py" = ["BLE001"]
+# Health probes map every dependency failure to down/503 by design.
+"backend/api/health.py" = ["BLE001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
