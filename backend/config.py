@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     EMBEDDING_DEDUP_THRESHOLD: float = 0.85
     ENABLE_EXTRACTION_CACHE: bool = False
 
+    # Experimental stale-decision detection (off unless explicitly enabled)
+    ENABLE_STALE_DECISION_DETECTION: bool = False
+    STALE_AFTER_DAYS: int = 90
+
+    # Result caps
+    MAX_EVIDENCE_ITEMS: int = 200
+
     @property
     def cors_origins_list(self) -> list[str]:
         if isinstance(self.CORS_ORIGINS, str):

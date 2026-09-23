@@ -274,6 +274,41 @@ async def test_unsupported_quote_rejected(tmp_graph):
     assert any("unsupported quote" in e for e in result.errors)
 
 
+async def test_stale_decision_gated_and_detected(tmp_graph, test_db, monkeypatch):
+    import datetime as dt
+
+    from backend.models.knowledge_graph import KnowledgeNode, NodeType
+    from backend.services.notifications import generate_notifications
+
+    aged = await tmp_graph.add_node(
+        KnowledgeNode(
+            type=NodeType.DECISION,
+            title="Old call",
+            # Naive datetimes: aging math is calendar-day based by convention.
+            created_at=dt.datetime(2020, 1, 1),  # noqa: DTZ001
+            observed_at=dt.datetime(2020, 1, 1),  # noqa: DTZ001
+        )
+    )
+    async with test_db() as session:
+        # Off by default: only the missing-owner rule fires.
+        created = await generate_notifications(tmp_graph, session, [aged], [], ingestion_id="i1")
+        assert {r.type for r in created} == {"MISSING_OWNER"}
+
+        monkeypatch.setattr(
+            "backend.services.notifications.settings.ENABLE_STALE_DECISION_DETECTION", True
+        )
+        created = await generate_notifications(tmp_graph, session, [aged], [], ingestion_id="i1")
+        # Missing-owner was already reported unread above; only the stale rule is new.
+        assert {r.type for r in created} == {"STALE_DECISION"}
+        stale = created[0]
+        assert stale.priority == "LOW"
+        assert stale.ingestion_id == "i1"
+
+        # Duplicates suppressed while unread.
+        again = await generate_notifications(tmp_graph, session, [aged], [], ingestion_id="i1")
+        assert again == []
+
+
 async def test_alembic_downgrade_roundtrip(tmp_path, monkeypatch):
     import asyncio
     import logging
@@ -371,3 +406,95 @@ async def test_unresolved_questions_endpoint(client):
     assert open_q["id"] in {
         n["id"] for n in (await client.get("/graph/questions/unresolved")).json()
     }
+
+
+async def test_enqueue_failure_maps_to_503(client, monkeypatch):
+    monkeypatch.setattr("backend.api.ingestion.settings.USE_BACKGROUND_JOBS", True)
+
+    def dead_enqueue(job_id: str):
+        raise ConnectionError("redis gone")
+
+    monkeypatch.setattr("backend.worker.enqueue_process", dead_enqueue)
+    r = await client.post("/ingestion", json={"source_type": "SLACK", "content": "x"})
+    r = await client.post(f"/ingestion/{r.json()['job_id']}/process")
+    assert r.status_code == 503
+    assert "worker unavailable" in r.json()["detail"]
+
+
+async def test_transcription_provider_failure_maps_to_502(client):
+    from backend.app import app
+    from backend.deps import get_transcriber
+    from backend.exceptions import TranscriptionError
+
+    async def failing_transcribe(path: str):
+        raise TranscriptionError("asr exploded")
+
+    app.dependency_overrides[get_transcriber] = lambda: failing_transcribe
+    try:
+        r = await client.post(
+            "/ingestion/transcribe",
+            files={"file": ("a.mp3", b"data", "audio/mpeg")},
+        )
+        assert r.status_code == 502
+    finally:
+        app.dependency_overrides.pop(get_transcriber, None)
+
+
+async def test_unknown_edge_type_rejected(tmp_graph):
+    from backend.services.extraction import run_extraction
+
+    async def bad_edge_type(system: str, user: str) -> dict:
+        return {
+            "nodes": [{"type": "PERSON", "title": "Ada", "content": "", "confidence": 1.0}],
+            "edges": [
+                {
+                    "source_title": "Ada",
+                    "target_title": "Ada",
+                    "edge_type": "MARRIED_TO",
+                    "evidence": "",
+                }
+            ],
+        }
+
+    result = await run_extraction(tmp_graph, "Ada and Ada", bad_edge_type)
+    assert result.nodes_created == 1
+    assert result.edges_created == 0
+    assert any("invalid edges record #0" in e for e in result.errors)
+
+
+async def test_hybrid_falls_back_when_embeddings_fail(tmp_graph):
+    from backend.models.knowledge_graph import KnowledgeNode, NodeType
+    from backend.services.retrieval import HybridRetriever
+
+    await tmp_graph.add_node(KnowledgeNode(type=NodeType.TOPIC, title="Search"))
+
+    async def dead_embed(texts: list[str]) -> list[list[float]]:
+        raise RuntimeError("embeddings down")
+
+    retriever = HybridRetriever(embed_texts=dead_embed)
+    ranked = await retriever.search(tmp_graph, "search")
+    assert [r.node.title for r in ranked] == ["Search"]
+    assert "keyword_match" in ranked[0].reasons
+
+
+async def test_neo4j_health_check_false_without_server(monkeypatch):
+    from backend.graph.neo4j_backend import Neo4jGraphManager
+
+    manager = Neo4jGraphManager.__new__(Neo4jGraphManager)
+
+    class DeadSession:
+        async def __aenter__(self):
+            raise RuntimeError("no server")
+
+        async def __aexit__(self, *args):
+            return False
+
+    class DeadDriver:
+        def session(self):
+            return DeadSession()
+
+        async def close(self):
+            pass
+
+    monkeypatch.setattr(manager, "_driver", DeadDriver(), raising=False)
+    assert await manager.health_check() is False

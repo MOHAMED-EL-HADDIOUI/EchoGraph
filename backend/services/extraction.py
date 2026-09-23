@@ -90,6 +90,22 @@ class ExtractedGraph(BaseModel):
     observations: list[str] = Field(default_factory=list)
 
 
+def _validate_items(raw: object, field: str, model: type, record) -> list:
+    """Validate one payload section item-by-item: a single bad record is
+    rejected with an error while valid siblings survive."""
+    items = raw.get(field, []) if isinstance(raw, dict) else []
+    if not isinstance(items, list):
+        record(f"invalid extraction section {field!r}: expected a list")
+        return []
+    valid = []
+    for i, item in enumerate(items):
+        try:
+            valid.append(model.model_validate(item))
+        except ValidationError as exc:
+            record(f"invalid {field} record #{i} rejected: {exc.errors()[0]['msg']}")
+    return valid
+
+
 def chunk_text(content: str, max_chars: int = 2000, overlap: int = 0) -> list[str]:
     """Split on blank lines, packing paragraphs into chunks of ~max_chars.
 
@@ -238,8 +254,12 @@ async def run_extraction(
             record(f"chunk timed out after {settings.LLM_TIMEOUT_SECONDS}s, skipped")
             continue
         except ValidationError as exc:
-            record(f"invalid extraction payload: {exc}")
-            continue
+            nodes = _validate_items(raw, "nodes", ExtractedNode, record)
+            edges = _validate_items(raw, "edges", ExtractedEdge, record)
+            if not nodes and not edges:
+                record(f"invalid extraction payload: {exc}")
+                continue
+            extracted = ExtractedGraph(nodes=nodes, edges=edges)
         obs.log_event(
             logger,
             "extraction.chunk",

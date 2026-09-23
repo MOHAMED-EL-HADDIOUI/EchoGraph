@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from pydantic import BaseModel, Field, ValidationError
 
 from backend import obs
+from backend.config import settings
 from backend.graph.manager import GraphManager
 from backend.models.knowledge_graph import (
     EdgeType,
@@ -314,4 +315,4 @@ def build_evidence(nodes: list[KnowledgeNode], edges: list[KnowledgeEdge]) -> li
                 confidence=endpoint_conf,
             )
         )
-    return items
+    return items[: settings.MAX_EVIDENCE_ITEMS]

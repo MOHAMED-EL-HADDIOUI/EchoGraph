@@ -20,7 +20,8 @@ documented here as the project convention.
 | 422 | Missing content, invalid payloads | process, dry-run, model validation |
 | 500 | Unhandled domain error (`EchoGraphError` mapped, no traces) | anywhere |
 | 501 | Celery missing / local transcriber missing | background, transcribe |
-| 503 | No `OPENAI_API_KEY` / dependency down | process, transcribe, `/ready` |
+| 502 | Transcription provider failed mid-call | transcribe |
+| 503 | No `OPENAI_API_KEY` / dependency down / worker unreachable | process, transcribe, `/ready` |
 
 ## Key endpoints
 
@@ -30,7 +31,8 @@ documented here as the project convention.
   `include_evidence`, `explain`); `GET /graph/nodes/{id}/lineage`,
   `GET /graph/nodes/{id}/history` (decision evolution timeline),
   `GET /graph/questions/unresolved` (organizational gaps),
-  `GET /graph/export`, `GET /graph/nodes/{id}/neighbors`
+  `GET /graph/export`, `GET /graph/nodes/{id}/neighbors`,
+  `PUT /graph/nodes/{id}`, `DELETE /graph/edges/{id}`
 - `GET /notifications`, `PATCH|POST /notifications/{id}/read`,
   `GET /notifications/{id}/explain`
 - `GET /health` (public), `GET /ready` (dependency breakdown)

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import settings
 from backend.database import NotificationRow
 from backend.graph.manager import GraphManager
 from backend.models.knowledge_graph import EdgeType, KnowledgeEdge, KnowledgeNode, NodeType
@@ -108,6 +110,28 @@ async def evaluate_notifications(
             [node.id],
             [node.id],
         )
+
+    if settings.ENABLE_STALE_DECISION_DETECTION:
+        for node in nodes:
+            if node.type != NodeType.DECISION:
+                continue
+            observed = node.observed_at or node.created_at
+            age_days = (dt.datetime.utcnow() - observed).days
+            if age_days < settings.STALE_AFTER_DAYS:
+                continue
+            if node.state == "superseded":
+                continue
+            if await find_duplicate(db, NotificationType.STALE_DECISION, {node.id}, ingestion_id):
+                continue
+            queue(
+                NotificationType.STALE_DECISION,
+                NotificationPriority.LOW,
+                f"Possibly stale: {node.title}",
+                f"DECISION unseen for {age_days} days (threshold "
+                f"{settings.STALE_AFTER_DAYS}). Experimental: verify before acting.",
+                [node.id],
+                [node.id],
+            )
 
     return created
 

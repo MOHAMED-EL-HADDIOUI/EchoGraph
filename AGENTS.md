@@ -69,7 +69,9 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
   from ingestion order.
 - `backend/services/notifications.py` — deterministic post-extraction rules:
   CONTRADICTS edge → HIGH CONTRADICTION; ownerless ACTION_ITEM/DECISION →
-  MEDIUM MISSING_OWNER (ownership: OWNS/DECIDED_BY/ASSIGNED_TO/DECIDES). Rows carry
+  MEDIUM MISSING_OWNER (ownership: OWNS/DECIDED_BY/ASSIGNED_TO/DECIDES);
+  experimental STALE_DECISION (LOW) only with `ENABLE_STALE_DECISION_DETECTION`.
+  Rows carry
   severity, `ingestion_id`, `evidence_ids`, `read_at`; dedupe via `find_duplicate()`
   (same type + nodes + ingestion, unread only). Pass `ingestion_id` from the caller.
   `to_read()` is the single ORM→API conversion (used by routes + explain).
@@ -125,12 +127,14 @@ FastAPI + knowledge-graph backend. Entrypoint `backend/app.py:app`
   no business logic; no Cypher outside backends; no service imports from `api`.
 - New graph operations go on both backends behind the `GraphManager` ABC (+ contract
   test in `tests/graph/test_contract.py`; Neo4j params skip without a server).
-- Tests: `tests/conftest.py` overrides graph (tmp JSON) + DB (tmp sqlite); never hit
+- Tests live in responsibility packages (`api/`, `services/`, `graph/`,
+  `providers/`, `evaluation/`, `integration/`) under `tests/`; `tests/conftest.py`
+  overrides graph (tmp JSON) + DB (tmp sqlite); never hit
   real services — inject fakes via `app.dependency_overrides` (prefer the `Fake*`
   providers for new tests).
-  `tests/test_eval_quality.py` is the frozen quality set (transcript → recorded LLM
+  `tests/evaluation/test_eval_quality.py` is the frozen quality set (transcript → recorded LLM
   payload → expected graph); prompt tweaks must keep it green. New eval cases go
   in `eval/cases/*.json` (run via `python -m echograph.eval` or
-  `tests/test_evaluation.py`).
+  `tests/evaluation/test_evaluation.py`).
 - Config: canonical names per `.env.example`; legacy names work via aliases.
   Prompt versions bump deliberately (recorded in run metadata + eval reports).

@@ -31,7 +31,11 @@ from backend.repositories import IngestionJobRepository
 from backend.services.extraction import CompleteJson, EmbedTexts
 from backend.services.processing import dry_run_job, process_job_core
 from backend.services.sources import AudioAdapter, ManualAdapter
-from backend.services.transcription import TranscribePath, TranscriptionUnavailable
+from backend.services.transcription import (
+    TranscribePath,
+    TranscriptionError,
+    TranscriptionUnavailable,
+)
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
@@ -130,6 +134,8 @@ async def transcribe_upload(
             transcript = await transcribe(path)
         except TranscriptionUnavailable as exc:
             raise HTTPException(status_code=501, detail=str(exc)) from exc
+        except TranscriptionError as exc:
+            raise HTTPException(status_code=502, detail=f"transcription failed: {exc}") from exc
     finally:
         os.unlink(path)
     doc = await AudioAdapter().normalize(
@@ -194,7 +200,10 @@ async def process_job(
             from backend.worker import enqueue_process
         except ImportError as exc:
             raise HTTPException(status_code=501, detail="Background workers not installed") from exc
-        enqueue_process(row.id)
+        try:
+            enqueue_process(row.id)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"worker unavailable: {exc}") from exc
         row.status = IngestionStatus.PROCESSING.value
         row.attempts += 1
         await db.commit()

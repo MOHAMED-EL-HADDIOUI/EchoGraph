@@ -6,7 +6,7 @@ from backend.graph.networkx_backend import NetworkXGraphManager
 from backend.services.evaluation import load_cases, run_case, summarize
 from backend.services.extraction import run_extraction
 
-CASES_DIR = Path(__file__).resolve().parent.parent / "eval" / "cases"
+CASES_DIR = Path(__file__).resolve().parent.parent.parent / "eval" / "cases"
 
 
 async def test_eval_suite_is_green(tmp_path):
@@ -59,7 +59,7 @@ async def test_malformed_llm_payload_is_recorded_not_raised(tmp_path):
     result = await run_extraction(graph, "hello", garbage_complete)
     assert result.nodes_created == 0
     assert result.edges_created == 0
-    assert len(result.errors) == 1
+    assert any("invalid nodes record #0" in e for e in result.errors)
 
 
 async def test_malformed_payload_job_still_completes(client):
