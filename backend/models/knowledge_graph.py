@@ -14,6 +14,12 @@ class NodeType(str, Enum):
     RATIONALE = "RATIONALE"
     QUESTION = "QUESTION"
     PERSON = "PERSON"
+    TEAM = "TEAM"
+    ORGANIZATION = "ORGANIZATION"
+    PROJECT = "PROJECT"
+    MEETING = "MEETING"
+    MESSAGE = "MESSAGE"
+    EVENT = "EVENT"
     TOPIC = "TOPIC"
     DOCUMENT = "DOCUMENT"
     ACTION_ITEM = "ACTION_ITEM"
@@ -21,10 +27,15 @@ class NodeType(str, Enum):
 
 class EdgeType(str, Enum):
     DECIDED_BY = "DECIDED_BY"
+    DECIDES = "DECIDES"
     RELATES_TO = "RELATES_TO"
     CONTRADICTS = "CONTRADICTS"
     SUPERSEDES = "SUPERSEDES"
     OWNS = "OWNS"
+    ASSIGNED_TO = "ASSIGNED_TO"
+    PART_OF = "PART_OF"
+    MENTIONS = "MENTIONS"
+    DISCUSSES = "DISCUSSES"
     BLOCKED_BY = "BLOCKED_BY"
     REFERENCES = "REFERENCES"
     DERIVED_FROM = "DERIVED_FROM"
@@ -39,6 +50,8 @@ class Evidence(BaseModel):
     the extractor could not tie the fact to a source span."""
 
     ingestion_id: str = ""
+    source_type: str = ""
+    source_id: str = ""
     quote: str = ""
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     created_at: dt.datetime = Field(default_factory=dt.datetime.utcnow)
@@ -59,6 +72,14 @@ class KnowledgeNode(BaseModel):
     metadata: dict = Field(default_factory=dict)
     embedding: list[float] | None = None
     evidence: list[Evidence] = Field(default_factory=list)
+    # Temporal lifecycle: valid_from/valid_until bound the claim when known;
+    # observed_at records when extraction saw it; state tracks decision
+    # evolution (active / superseded / uncertain). Never inferred from
+    # ingestion order alone.
+    valid_from: dt.datetime | None = None
+    valid_until: dt.datetime | None = None
+    observed_at: dt.datetime | None = None
+    state: str = "active"
 
 
 class KnowledgeEdge(BaseModel):
@@ -81,6 +102,27 @@ class GraphData(BaseModel):
 
     nodes: list[KnowledgeNode] = Field(default_factory=list)
     edges: list[KnowledgeEdge] = Field(default_factory=list)
+
+
+class GraphDiff(BaseModel):
+    """What one processing run changed (or would change, for dry runs)."""
+
+    nodes_added: int = 0
+    nodes_merged: int = 0
+    edges_added: int = 0
+    notifications_created: int = 0
+    contradictions: int = 0
+    missing_owners: int = 0
+
+
+class DryRunResult(BaseModel):
+    """Proposed mutations from a dry run. Nothing was persisted."""
+
+    job_id: str
+    diff: GraphDiff = Field(default_factory=GraphDiff)
+    proposed_nodes: list[KnowledgeNode] = Field(default_factory=list)
+    proposed_edges: list[KnowledgeEdge] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
 
 
 class Verdict(str, Enum):

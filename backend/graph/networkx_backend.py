@@ -13,6 +13,7 @@ import numpy as np
 from backend.config import settings
 from backend.graph.manager import GraphManager
 from backend.models.knowledge_graph import (
+    EdgeType,
     GraphData,
     KnowledgeEdge,
     KnowledgeNode,
@@ -112,6 +113,29 @@ class NetworkXGraphManager(GraphManager):
             self._save()
         return True
 
+    async def update_node(self, node_id: str, patch: KnowledgeNode) -> KnowledgeNode:
+        async with self._lock:
+            if node_id not in self._graph:
+                raise ValueError(f"Node {node_id} not found")
+            old = dict(self._graph.nodes[node_id])
+            data = patch.model_dump(mode="json")
+            data["id"] = node_id
+            data["created_at"] = old.get("created_at")
+            data["updated_at"] = dt.datetime.utcnow().isoformat()
+            self._graph.nodes[node_id].clear()
+            self._graph.nodes[node_id].update(data)
+            self._save()
+        return KnowledgeNode(**self._graph.nodes[node_id])
+
+    async def remove_edge(self, edge_id: str) -> bool:
+        async with self._lock:
+            for u, v, data in list(self._graph.edges(data=True)):
+                if data.get("id") == edge_id:
+                    self._graph.remove_edge(u, v)
+                    self._save()
+                    return True
+        return False
+
     # ── queries ─────────────────────────────────────────────────
 
     async def get_node(self, node_id: str) -> KnowledgeNode | None:
@@ -137,9 +161,14 @@ class NetworkXGraphManager(GraphManager):
         for _, data in self._graph.nodes(data=True):
             if node_type and data.get("type") != node_type.value:
                 continue
-            title = str(data.get("title", "")).lower()
-            content = str(data.get("content", "")).lower()
-            if q in title or q in content:
+            haystacks = [
+                str(data.get("title", "")).lower(),
+                str(data.get("content", "")).lower(),
+            ]
+            metadata = data.get("metadata")
+            if isinstance(metadata, dict):
+                haystacks.extend(str(v).lower() for v in metadata.values())
+            if any(q in hay for hay in haystacks):
                 try:
                     results.append(KnowledgeNode(**data))
                 except Exception:
@@ -235,12 +264,49 @@ class NetworkXGraphManager(GraphManager):
             t = data.get("type", "UNKNOWN")
             type_counts[t] = type_counts.get(t, 0) + 1
         edge_type_counts: dict[str, int] = {}
+        contradictions = 0
         for _, _, data in self._graph.edges(data=True):
             t = data.get("edge_type", "UNKNOWN")
             edge_type_counts[t] = edge_type_counts.get(t, 0) + 1
+            if t == EdgeType.CONTRADICTS.value:
+                contradictions += 1
+        connected: set[str] = set()
+        for u, v in self._graph.edges():
+            connected.add(u)
+            connected.add(v)
+        orphan_nodes = sum(1 for n in self._graph.nodes if n not in connected)
+        ownerless_actions = 0
+        ownership = {
+            EdgeType.OWNS.value,
+            EdgeType.DECIDED_BY.value,
+            EdgeType.ASSIGNED_TO.value,
+            EdgeType.DECIDES.value,
+        }
+        for nid in self._graph.nodes:
+            ntype = self._graph.nodes[nid].get("type")
+            if ntype not in (NodeType.ACTION_ITEM.value, NodeType.DECISION.value):
+                continue
+            owned = any(
+                d.get("edge_type") in ownership
+                for _, _, d in list(self._graph.in_edges(nid, data=True))
+                + list(self._graph.out_edges(nid, data=True))
+            )
+            if not owned:
+                ownerless_actions += 1
         return {
             "total_nodes": self._graph.number_of_nodes(),
             "total_edges": self._graph.number_of_edges(),
             "node_types": type_counts,
             "edge_types": edge_type_counts,
+            "orphan_nodes": orphan_nodes,
+            "ownerless_actions": ownerless_actions,
+            "contradictions": contradictions,
         }
+
+    async def clear(self) -> None:
+        async with self._lock:
+            self._graph.clear()
+            self._save()
+
+    async def health_check(self) -> bool:
+        return True

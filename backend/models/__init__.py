@@ -7,10 +7,12 @@ from backend.models.ingestion import (
     SourceType,
 )
 from backend.models.knowledge_graph import (
+    DryRunResult,
     EdgeType,
     Evidence,
     EvidenceItem,
     GraphData,
+    GraphDiff,
     GraphQuery,
     GraphQueryResult,
     KnowledgeEdge,
@@ -28,10 +30,12 @@ from backend.models.notifications import (
 
 __all__ = [
     "Document",
+    "DryRunResult",
     "EdgeType",
     "Evidence",
     "EvidenceItem",
     "GraphData",
+    "GraphDiff",
     "GraphQuery",
     "GraphQueryResult",
     "IngestionJobRead",

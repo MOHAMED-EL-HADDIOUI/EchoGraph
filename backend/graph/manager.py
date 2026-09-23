@@ -30,7 +30,32 @@ class GraphManager(ABC):
     async def merge_node(self, existing_id: str, new_data: KnowledgeNode) -> KnowledgeNode: ...
 
     @abstractmethod
+    async def update_node(self, node_id: str, patch: KnowledgeNode) -> KnowledgeNode:
+        """Overwrite mutable fields of a node (id/created_at preserved)."""
+        ...
+
+    @abstractmethod
     async def delete_node(self, node_id: str) -> bool: ...
+
+    @abstractmethod
+    async def remove_edge(self, edge_id: str) -> bool:
+        """Delete a single edge by its ID."""
+        ...
+
+    async def get_neighbors(self, node_id: str) -> GraphData:
+        """1-hop neighborhood. Concrete default; backends may override."""
+        node = await self.get_node(node_id)
+        if node is None:
+            return GraphData()
+        edges = await self.get_edges(node_id)
+        neighbor_ids = {e.source_id for e in edges} | {e.target_id for e in edges}
+        neighbor_ids.discard(node_id)
+        nodes = [node]
+        for nid in sorted(neighbor_ids):
+            found = await self.get_node(nid)
+            if found is not None:
+                nodes.append(found)
+        return GraphData(nodes=nodes, edges=edges)
 
     @abstractmethod
     async def search_nodes(
@@ -54,13 +79,31 @@ class GraphManager(ABC):
     @abstractmethod
     async def get_statistics(self) -> dict[str, Any]: ...
 
+    @abstractmethod
+    async def clear(self) -> None:
+        """Delete all nodes and edges. Tests and demos only."""
+        ...
+
+    @abstractmethod
+    async def health_check(self) -> bool:
+        """True when the backend answers a trivial probe."""
+        ...
+
 
 def create_graph_manager(backend: str = "networkx") -> GraphManager:
     """Factory: return the requested backend implementation."""
-    if backend == "neo4j":
-        from backend.graph.neo4j_backend import Neo4jGraphManager
+    return GraphManagerFactory.create(backend)
 
-        return Neo4jGraphManager()
-    from backend.graph.networkx_backend import NetworkXGraphManager
 
-    return NetworkXGraphManager()
+class GraphManagerFactory:
+    """Config-driven factory for graph backends."""
+
+    @staticmethod
+    def create(backend: str = "networkx") -> GraphManager:
+        if backend == "neo4j":
+            from backend.graph.neo4j_backend import Neo4jGraphManager
+
+            return Neo4jGraphManager()
+        from backend.graph.networkx_backend import NetworkXGraphManager
+
+        return NetworkXGraphManager()

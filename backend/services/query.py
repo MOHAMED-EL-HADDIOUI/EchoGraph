@@ -32,31 +32,9 @@ Keep the answer under 100 words.
 
 def make_openai_answer(model: str, api_key: str) -> CompleteText:
     """Build the production CompleteText backed by OpenAI chat completions."""
+    from backend.providers.llm import OpenAIAnswerProvider
 
-    async def complete(system: str, user: str) -> str:
-        from openai import AsyncOpenAI
-
-        timer = obs.Timer()
-        client = AsyncOpenAI(api_key=api_key)
-        resp = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=0,
-        )
-        usage = getattr(resp, "usage", None)
-        obs.log_event(
-            logger,
-            "llm.answer",
-            model=model,
-            latency_ms=round(timer.elapsed_ms(), 1),
-            usage=usage.model_dump() if usage is not None else None,
-        )
-        return resp.choices[0].message.content or ""
-
-    return complete
+    return OpenAIAnswerProvider(model=model, api_key=api_key).as_answer()
 
 
 def format_context(nodes: list[KnowledgeNode], edges: list[KnowledgeEdge]) -> str:

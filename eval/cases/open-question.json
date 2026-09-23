@@ -1,1 +1,65 @@
-{"description": "An unresolved question linked to a topic; questions need no owner.", "expected": {"contradictions": [], "edges": [{"edge_type": "RELATES_TO", "source": "Launch date", "target": "Launch"}], "nodes": [{"title": "Launch date", "type": "QUESTION"}, {"title": "Launch", "type": "TOPIC"}, {"title": "Cara", "type": "PERSON"}], "ownerless": []}, "id": "open-question", "recorded": [{"edges": [{"edge_type": "RELATES_TO", "evidence": "launch date is still open", "source_title": "Launch date", "target_title": "Launch"}], "nodes": [{"confidence": 0.8, "content": "Nobody answered yet", "quote": "nobody could answer when we launch", "title": "Launch date", "type": "QUESTION"}, {"confidence": 0.7, "content": "", "quote": "the launch", "title": "Launch", "type": "TOPIC"}, {"confidence": 1.0, "content": "", "quote": "Cara asked", "title": "Cara", "type": "PERSON"}]}], "transcript": "Cara asked when we launch, but nobody could answer. The launch date is still open."}
+{
+  "description": "An unresolved question linked to a topic; questions need no owner.",
+  "expected": {
+    "contradictions": [],
+    "edges": [
+      {
+        "edge_type": "RELATES_TO",
+        "source": "Launch date",
+        "target": "Launch"
+      }
+    ],
+    "nodes": [
+      {
+        "title": "Launch date",
+        "type": "QUESTION"
+      },
+      {
+        "title": "Launch",
+        "type": "TOPIC"
+      },
+      {
+        "title": "Cara",
+        "type": "PERSON"
+      }
+    ],
+    "ownerless": []
+  },
+  "id": "open-question",
+  "recorded": [
+    {
+      "edges": [
+        {
+          "edge_type": "RELATES_TO",
+          "evidence": "launch date is still open",
+          "source_title": "Launch date",
+          "target_title": "Launch"
+        }
+      ],
+      "nodes": [
+        {
+          "confidence": 0.8,
+          "content": "Nobody answered yet",
+          "quote": "nobody could answer",
+          "title": "Launch date",
+          "type": "QUESTION"
+        },
+        {
+          "confidence": 0.7,
+          "content": "",
+          "quote": "the launch",
+          "title": "Launch",
+          "type": "TOPIC"
+        },
+        {
+          "confidence": 1.0,
+          "content": "",
+          "quote": "Cara asked",
+          "title": "Cara",
+          "type": "PERSON"
+        }
+      ]
+    }
+  ],
+  "transcript": "Cara asked when we launch, but nobody could answer. The launch date is still open."
+}

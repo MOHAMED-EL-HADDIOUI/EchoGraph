@@ -12,14 +12,25 @@ NODE_SCHEMA: dict[NodeType, dict] = {
     NodeType.TOPIC: {"label": "Topic", "color": "#EC4899", "icon": "📌"},
     NodeType.DOCUMENT: {"label": "Document", "color": "#6B7280", "icon": "📄"},
     NodeType.ACTION_ITEM: {"label": "Action Item", "color": "#EF4444", "icon": "✅"},
+    NodeType.TEAM: {"label": "Team", "color": "#14B8A6", "icon": "👥"},
+    NodeType.ORGANIZATION: {"label": "Organization", "color": "#6366F1", "icon": "🏢"},
+    NodeType.PROJECT: {"label": "Project", "color": "#0EA5E9", "icon": "📁"},
+    NodeType.MEETING: {"label": "Meeting", "color": "#F472B6", "icon": "📅"},
+    NodeType.MESSAGE: {"label": "Message", "color": "#94A3B8", "icon": "💬"},
+    NodeType.EVENT: {"label": "Event", "color": "#A3E635", "icon": "📍"},
 }
 
 EDGE_SCHEMA: dict[EdgeType, dict] = {
     EdgeType.DECIDED_BY: {"label": "decided by", "color": "#60A5FA", "directed": True},
+    EdgeType.DECIDES: {"label": "decides", "color": "#60A5FA", "directed": True},
     EdgeType.RELATES_TO: {"label": "relates to", "color": "#A78BFA", "directed": False},
     EdgeType.CONTRADICTS: {"label": "contradicts", "color": "#F87171", "directed": False},
     EdgeType.SUPERSEDES: {"label": "supersedes", "color": "#FBBF24", "directed": True},
     EdgeType.OWNS: {"label": "owns", "color": "#34D399", "directed": True},
+    EdgeType.ASSIGNED_TO: {"label": "assigned to", "color": "#34D399", "directed": True},
+    EdgeType.PART_OF: {"label": "part of", "color": "#FACC15", "directed": True},
+    EdgeType.MENTIONS: {"label": "mentions", "color": "#CBD5E1", "directed": True},
+    EdgeType.DISCUSSES: {"label": "discusses", "color": "#67E8F9", "directed": True},
     EdgeType.BLOCKED_BY: {"label": "blocked by", "color": "#FB923C", "directed": True},
     EdgeType.REFERENCES: {"label": "references", "color": "#9CA3AF", "directed": True},
     EdgeType.DERIVED_FROM: {"label": "derived from", "color": "#C084FC", "directed": True},
@@ -44,6 +55,17 @@ VALID_EDGES: set[tuple[NodeType, EdgeType, NodeType]] = {
     (NodeType.ACTION_ITEM, EdgeType.BLOCKED_BY, NodeType.QUESTION),
     (NodeType.TOPIC, EdgeType.RELATES_TO, NodeType.TOPIC),
     (NodeType.DOCUMENT, EdgeType.REFERENCES, NodeType.DOCUMENT),
+    # Organizational structure (additive; existing triples unchanged)
+    (NodeType.PERSON, EdgeType.DECIDES, NodeType.DECISION),
+    (NodeType.ACTION_ITEM, EdgeType.ASSIGNED_TO, NodeType.PERSON),
+    (NodeType.PERSON, EdgeType.PART_OF, NodeType.TEAM),
+    (NodeType.TEAM, EdgeType.PART_OF, NodeType.ORGANIZATION),
+    (NodeType.PROJECT, EdgeType.PART_OF, NodeType.ORGANIZATION),
+    (NodeType.MEETING, EdgeType.DISCUSSES, NodeType.TOPIC),
+    (NodeType.PERSON, EdgeType.DISCUSSES, NodeType.TOPIC),
+    (NodeType.MESSAGE, EdgeType.MENTIONS, NodeType.PERSON),
+    (NodeType.MESSAGE, EdgeType.MENTIONS, NodeType.TOPIC),
+    (NodeType.MEETING, EdgeType.REFERENCES, NodeType.DOCUMENT),
 }
 
 NEO4J_CONSTRAINTS = [

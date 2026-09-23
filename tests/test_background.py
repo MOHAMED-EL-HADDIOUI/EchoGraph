@@ -19,10 +19,11 @@ async def test_process_core_success_and_failure(client, test_db, tmp_graph):
 
     async with test_db() as session:
         row = await session.get(IngestionJobRow, job_id)
-        row, count = await process_job_core(session, tmp_graph, row, empty_complete)
+        row, count, diff = await process_job_core(session, tmp_graph, row, empty_complete)
         assert row.status == "COMPLETED"
         assert row.attempts == 1
         assert count == 0
+        assert diff.nodes_added == 0
 
     async def boom_complete(system: str, user: str) -> dict:
         raise RuntimeError("nope")
@@ -31,7 +32,7 @@ async def test_process_core_success_and_failure(client, test_db, tmp_graph):
         row = await session.get(IngestionJobRow, job_id)
         row.status = "PENDING"
         await session.commit()
-        row, _ = await process_job_core(session, tmp_graph, row, boom_complete)
+        row, _, _ = await process_job_core(session, tmp_graph, row, boom_complete)
         assert row.status == "FAILED"
         assert "nope" in row.error
 

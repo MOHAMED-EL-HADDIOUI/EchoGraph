@@ -85,7 +85,7 @@ async def _run_job(job_id: str) -> dict:
             embedder = None
             if settings.ENABLE_EMBEDDING_DEDUP:
                 embedder = make_openai_embeddings(settings.EMBEDDING_MODEL, settings.OPENAI_API_KEY)
-            row, notification_count = await process_job_core(
+            row, notification_count, _diff = await process_job_core(
                 session, graph, row, complete, embedder
             )
             obs.log_event(

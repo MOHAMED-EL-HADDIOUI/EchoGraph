@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 from typing import Any
@@ -130,6 +131,33 @@ class Neo4jGraphManager(GraphManager):
             record = await result.single()
             return bool(record and record["c"] > 0)
 
+    async def update_node(self, node_id: str, patch: KnowledgeNode) -> KnowledgeNode:
+        data = patch.model_dump(mode="json")
+        data["id"] = node_id
+        async with self._driver.session() as session:
+            result = await session.run("MATCH (n:KnowledgeNode {id: $nid}) RETURN n", nid=node_id)
+            record = await result.single()
+            if record is None:
+                raise ValueError(f"Node {node_id} not found")
+            old = self._record_to_node(dict(record["n"]))
+            data["created_at"] = old.created_at.isoformat()
+            data["updated_at"] = dt.datetime.utcnow().isoformat()
+            result = await session.run(
+                "MATCH (n:KnowledgeNode {id: $nid}) SET n = $props RETURN n",
+                nid=node_id,
+                props=self._serialize_props(data),
+            )
+            record = await result.single()
+            assert record is not None
+            return self._record_to_node(dict(record["n"]))
+
+    async def remove_edge(self, edge_id: str) -> bool:
+        query = "MATCH ()-[r:EDGE {id: $eid}]-() DELETE r RETURN count(r) as c"
+        async with self._driver.session() as session:
+            result = await session.run(query, eid=edge_id)
+            record = await result.single()
+            return bool(record and record["c"] > 0)
+
     # ── queries ─────────────────────────────────────────────────
 
     async def get_node(self, node_id: str) -> KnowledgeNode | None:
@@ -161,7 +189,8 @@ class Neo4jGraphManager(GraphManager):
         cypher = f"""
         MATCH (n:KnowledgeNode)
         WHERE (toLower(n.title) CONTAINS toLower($q)
-               OR toLower(n.content) CONTAINS toLower($q))
+               OR toLower(n.content) CONTAINS toLower($q)
+               OR toLower(coalesce(n.metadata, '')) CONTAINS toLower($q))
         {type_clause}
         RETURN n LIMIT $lim
         """
@@ -285,4 +314,47 @@ class Neo4jGraphManager(GraphManager):
 
             r = await session.run("MATCH (n:KnowledgeNode) RETURN n.type as t, count(*) as c")
             stats["node_types"] = {rec["t"]: rec["c"] async for rec in r}
+
+            r = await session.run(
+                "MATCH ()-[r:EDGE]->() WHERE r.edge_type = 'CONTRADICTS' RETURN count(r) as c"
+            )
+            rec = await r.single()
+            stats["contradictions"] = rec["c"] if rec else 0
+
+            r = await session.run("MATCH (n:KnowledgeNode) WHERE NOT (n)--() RETURN count(n) as c")
+            rec = await r.single()
+            stats["orphan_nodes"] = rec["c"] if rec else 0
+
+            r = await session.run("MATCH ()-[r:EDGE]->() RETURN r.edge_type as t, count(*) as c")
+            stats["edge_types"] = {rec["t"]: rec["c"] async for rec in r}
+
+        # Ownerless check mirrors the NetworkX backend exactly (same semantics
+        # on both backends matters more than a single clever query).
+        ownerless_actions = 0
+        ownership = {"OWNS", "DECIDED_BY", "ASSIGNED_TO", "DECIDES"}
+        for node in await self.get_all_nodes():
+            if node.type.value not in ("ACTION_ITEM", "DECISION"):
+                continue
+            edges = await self.get_edges(node.id)
+            if not any(
+                e.edge_type.value in ownership
+                and (e.target_id == node.id or e.source_id == node.id)
+                for e in edges
+            ):
+                ownerless_actions += 1
+        stats["ownerless_actions"] = ownerless_actions
         return stats
+
+    async def clear(self) -> None:
+        async with self._driver.session() as session:
+            result = await session.run("MATCH (n:KnowledgeNode) DETACH DELETE n")
+            await result.consume()
+
+    async def health_check(self) -> bool:
+        try:
+            async with self._driver.session() as session:
+                result = await session.run("RETURN 1 as ok")
+                record = await result.single()
+                return bool(record and record["ok"] == 1)
+        except Exception:
+            return False

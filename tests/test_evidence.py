@@ -30,7 +30,10 @@ async def quoted_complete(system: str, user: str) -> dict:
 async def test_extraction_attaches_provenance(client):
     app.dependency_overrides[get_extraction_complete] = lambda: quoted_complete
     try:
-        r = await client.post("/ingestion", json={"source_type": "MEETING", "content": "x"})
+        r = await client.post(
+            "/ingestion",
+            json={"source_type": "MEETING", "content": "Team sync: we will ship v1. Ada decided."},
+        )
         job_id = r.json()["job_id"]
         body = (await client.post(f"/ingestion/{job_id}/process")).json()
         assert body["status"] == "COMPLETED"

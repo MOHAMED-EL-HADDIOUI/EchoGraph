@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from backend.models.knowledge_graph import GraphDiff
+
 
 class SourceType(str, Enum):
     MEETING = "MEETING"
@@ -55,11 +57,14 @@ class IngestionJobRead(BaseModel):
     title: str = ""
     error: str = ""
     attempts: int = 0
+    content_sha: str = ""
     metadata: dict = Field(default_factory=dict)
     created_at: dt.datetime | None = None
     completed_at: dt.datetime | None = None
     # Set only by the process endpoint; 0 elsewhere.
     notifications_created: int = 0
+    # Set only by the process endpoint: what the run changed.
+    diff: GraphDiff | None = None
 
 
 class Document(BaseModel):

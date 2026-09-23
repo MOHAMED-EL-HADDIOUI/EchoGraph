@@ -65,6 +65,20 @@ async def merge_into_node(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.put(
+    "/nodes/{node_id}",
+    response_model=KnowledgeNode,
+    summary="Overwrite a node's mutable fields",
+)
+async def update_node(
+    node_id: str, patch: KnowledgeNode, graph: GraphManager = Depends(get_graph_manager)
+) -> KnowledgeNode:
+    try:
+        return await graph.update_node(node_id, patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/nodes", response_model=list[KnowledgeNode], summary="List nodes (paginated)")
 async def list_nodes(
     node_type: NodeType | None = None,
@@ -125,7 +139,9 @@ async def create_edge(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.get("/nodes/{node_id}/edges", response_model=list[KnowledgeEdge])
+@router.get(
+    "/nodes/{node_id}/edges", response_model=list[KnowledgeEdge], summary="Edges touching a node"
+)
 async def read_edges(
     node_id: str, graph: GraphManager = Depends(get_graph_manager)
 ) -> list[KnowledgeEdge]:
@@ -133,6 +149,33 @@ async def read_edges(
     if node is None:
         raise HTTPException(status_code=404, detail="Node not found")
     return await graph.get_edges(node_id)
+
+
+@router.get(
+    "/nodes/{node_id}/neighbors",
+    response_model=GraphData,
+    summary="1-hop neighborhood of a node",
+)
+async def read_neighbors(
+    node_id: str, graph: GraphManager = Depends(get_graph_manager)
+) -> GraphData:
+    node = await graph.get_node(node_id)
+    if node is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return await graph.get_neighbors(node_id)
+
+
+@router.delete(
+    "/edges/{edge_id}",
+    summary="Delete one edge by ID",
+)
+async def remove_edge(
+    edge_id: str, graph: GraphManager = Depends(get_graph_manager)
+) -> dict[str, bool]:
+    deleted = await graph.remove_edge(edge_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Edge not found")
+    return {"deleted": True}
 
 
 @router.get(
@@ -151,8 +194,22 @@ async def read_subgraph(
     return await graph.get_subgraph(node_id, depth=depth)
 
 
-@router.get("", response_model=GraphData)
+@router.get("", response_model=GraphData, summary="Full graph snapshot (bounded)")
 async def read_full_graph(
+    limit: int = Query(default=500, le=2000),
+    graph: GraphManager = Depends(get_graph_manager),
+) -> GraphData:
+    return await graph.get_full_graph(limit=limit)
+
+
+@router.get(
+    "/export",
+    response_model=GraphData,
+    summary="Export nodes, edges, and provenance as JSON",
+    description="Debugging/demo export. Same bounded snapshot as the full-graph "
+    "route; every node/edge carries its evidence and ingestion IDs. No secrets included.",
+)
+async def export_graph(
     limit: int = Query(default=500, le=2000),
     graph: GraphManager = Depends(get_graph_manager),
 ) -> GraphData:

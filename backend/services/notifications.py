@@ -13,7 +13,7 @@ from backend.models.notifications import NotificationPriority, NotificationType
 
 # Node types that should have an owner; edge types that confer ownership.
 OWNERLESS_TYPES = {NodeType.ACTION_ITEM, NodeType.DECISION}
-OWNERSHIP_EDGES = {EdgeType.OWNS, EdgeType.DECIDED_BY}
+OWNERSHIP_EDGES = {EdgeType.OWNS, EdgeType.DECIDED_BY, EdgeType.ASSIGNED_TO, EdgeType.DECIDES}
 
 
 async def find_duplicate(
@@ -41,20 +41,14 @@ async def find_duplicate(
     return None
 
 
-async def generate_notifications(
+async def evaluate_notifications(
     graph: GraphManager,
-    db: AsyncSession,
     nodes: list[KnowledgeNode],
     edges: list[KnowledgeEdge],
-    ingestion_id: str = "",
+    ingestion_id: str,
+    db: AsyncSession,
 ) -> list[NotificationRow]:
-    """Create notifications for freshly extracted nodes/edges.
-
-    Deterministic heuristics only (no LLM): contradictions and missing owners.
-    Every notification carries severity, affected node IDs, the ingestion ID,
-    and the evidence IDs it was raised from. Skips findings already covered
-    by an unread notification. Commits.
-    """
+    """Build (unsaved) notification rows for freshly extracted nodes/edges."""
     created: list[NotificationRow] = []
 
     def queue(
@@ -116,11 +110,35 @@ async def generate_notifications(
             NotificationType.MISSING_OWNER,
             NotificationPriority.MEDIUM,
             f"Missing owner: {node.title}",
-            f"{node.type.value} has no ownership edge (OWNS / DECIDED_BY).",
+            f"{node.type.value} has no ownership edge (OWNS / DECIDED_BY / ASSIGNED_TO / DECIDES).",
             [node.id],
             [node.id],
         )
 
+    for row in created:
+        db.add(row)
+    if created:
+        await db.commit()
+        for row in created:
+            await db.refresh(row)
+    return created
+
+
+async def generate_notifications(
+    graph: GraphManager,
+    db: AsyncSession,
+    nodes: list[KnowledgeNode],
+    edges: list[KnowledgeEdge],
+    ingestion_id: str = "",
+) -> list[NotificationRow]:
+    """Create notifications for freshly extracted nodes/edges.
+
+    Deterministic heuristics only (no LLM): contradictions and missing owners.
+    Every notification carries severity, affected node IDs, the ingestion ID,
+    and the evidence IDs it was raised from. Skips findings already covered
+    by an unread notification. Commits.
+    """
+    created = await evaluate_notifications(graph, nodes, edges, ingestion_id, db)
     for row in created:
         db.add(row)
     if created:
