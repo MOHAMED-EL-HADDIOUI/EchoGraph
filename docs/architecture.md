@@ -1,5 +1,29 @@
 # Architecture
 
+```mermaid
+flowchart LR
+    A[ingest: text/audio] --> B[(ingestion_jobs: PENDING)]
+    B --> C{process}
+    C -->|inline| D[process_job_core]
+    C -->|USE_BACKGROUND_JOBS| E[(Redis)] --> F[celery worker] --> D
+    D --> G[chunk + LLM extract]
+    G --> H[validate: add_edge_validated]
+    H --> I[(graph: nodes/edges + evidence)]
+    I --> J[notifications: contradiction / missing-owner]
+    D --> K[(job: COMPLETED)]
+    I --> L[query: retrieve + expand + grounded answer]
+```
+
+```mermaid
+flowchart TD
+    Q[query] --> R[HybridRetriever: keyword + embedding + graph bonus]
+    R --> S[1-hop closure]
+    S --> T[ranked context: exact > connected > contradiction]
+    T --> U{answer model?}
+    U -->|no| V[retrieval-only, answer=null]
+    U -->|yes| W[JSON answer + citations + uncertainties/conflicts]
+```
+
 ```
 ingest → extract → validate → graph → notify → query
 ```

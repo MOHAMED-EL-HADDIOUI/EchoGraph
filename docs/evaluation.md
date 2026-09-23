@@ -1,5 +1,10 @@
 # Evaluation
 
+> Synthetic fixture scores demonstrate deterministic pipeline correctness,
+> not real-world live LLM quality. Do not claim production extraction
+> accuracy from these numbers — run `--provider live` before making
+> quality claims.
+
 EchoGraph treats extraction quality as a measured property, not a vibe.
 `eval/cases/*.json` holds synthetic organizational transcripts with **recorded**
 LLM payloads and hand-checked expectations — separate from implementation

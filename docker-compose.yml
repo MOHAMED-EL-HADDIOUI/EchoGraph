@@ -1,6 +1,31 @@
 services:
+  # Minimal dev-prod API: SQLite + NetworkX, no dependencies required.
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./echograph.db
+      GRAPH_BACKEND: networkx
+    volumes:
+      - ./echograph.db:/app/echograph.db
+      - ./echograph_data.json:/app/echograph_data.json
+
+  # Full profile adds Postgres, Redis, Neo4j, and a Celery worker:
+  #   docker compose --profile full up --build
+  worker:
+    build: .
+    profiles: ["full"]
+    command: celery -A backend.worker:celery_app worker --loglevel=info --queues=echograph
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      USE_BACKGROUND_JOBS: "true"
+    depends_on:
+      - redis
+
   neo4j:
     image: neo4j:5-community
+    profiles: ["full"]
     ports:
       - "7474:7474"
       - "7687:7687"
@@ -12,11 +37,13 @@ services:
 
   redis:
     image: redis:7-alpine
+    profiles: ["full"]
     ports:
       - "6379:6379"
 
   postgres:
     image: postgres:16-alpine
+    profiles: ["full"]
     ports:
       - "5432:5432"
     environment:

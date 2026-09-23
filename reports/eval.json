@@ -217,6 +217,6 @@
   "model": "",
   "extraction_prompt_version": "v1",
   "answer_prompt_version": "v1",
-  "timestamp": "2026-09-23T18:01:10.311762",
-  "runtime_s": 0.16
+  "timestamp": "2026-09-23T18:10:00.519956",
+  "runtime_s": 0.28
 }

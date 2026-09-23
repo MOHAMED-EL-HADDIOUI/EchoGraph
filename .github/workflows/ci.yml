@@ -15,8 +15,10 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
       - name: Lint
-        run: ruff check backend tests
+        run: ruff check .
       - name: Format
-        run: ruff format --check backend tests
+        run: ruff format --check .
       - name: Test
         run: pytest -q
+      - name: Evaluation gate
+        run: python -m echograph.eval --report reports/eval.json
