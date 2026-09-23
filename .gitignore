@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+.env
+*.db
+echograph_data.json
+node_modules/
+frontend/dist/
+.vite/
+*.log
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+tests/.pytest_cache/

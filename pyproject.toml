@@ -1,0 +1,55 @@
+[project]
+name = "echograph"
+version = "0.1.0"
+description = "Autonomous Knowledge Graph Builder from Organizational Noise"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[all]>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "openai>=1.40",
+    "neo4j>=5.0",
+    "networkx>=3.0",
+    "numpy>=1.26",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.20",
+    "python-multipart>=0.0.9",
+    "python-dotenv>=1.0",
+    "httpx>=0.27",
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+]
+transcription = [
+    "faster-whisper>=1.0",
+]
+production = [
+    "celery[redis]>=5.4",
+    "redis>=5.0",
+    "asyncpg>=0.29",
+    "psycopg2-binary>=2.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+[tool.ruff.lint]
+# B008: FastAPI Depends() in defaults is the framework idiom, not a bug.
+# DTZ003: codebase standardizes on datetime.utcnow; migrate with the Alembic task.
+ignore = ["B008", "DTZ003"]
+
+[tool.ruff.lint.per-file-ignores]
+# Graph backends do tolerant reads over persisted data: skip corrupt entries.
+"backend/graph/networkx_backend.py" = ["BLE001", "S110"]
+"backend/graph/neo4j_backend.py" = ["BLE001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
